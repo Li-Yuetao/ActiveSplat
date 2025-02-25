@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="description"
+        content="ActiveSplat: High-Fidelity Scene Reconstruction through Active Gaussian Splatting">
+  <meta name="keywords" content="Robotic Manipulation, Structural Representation, Model-based Planning, Foundation Models">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ActiveSplat</title>
+
+  <!-- Thumbnail for social media sharing -->
+  <meta property="og:image" content="media/thumbnail.png">
+
+  <!-- Favicon -->
+  <link rel="icon" href="media/icon.png" type="image/jpeg">
+
+  <script>
+    window.dataLayer = window.dataLayer || [];
+  </script>
+
+  <script>
+    function updateInTheWild() {
+      var task = document.getElementById("inthewild-video-menu").value;
+
+      console.log("updateInTheWild", task)
+
+      var video = document.getElementById("inthewild-video");
+      video.src = "media/videos/" + 
+                  task + 
+                  ".m4v"
+      video.play();
+    }
+
+    function updateBimanual() {
+      var task = document.getElementById("bimanual-video-menu").value;
+
+      console.log("updateBimanual", task)
+
+      var video = document.getElementById("bimanual-video");
+      video.src = "media/videos/" + 
+                  task + 
+                  ".m4v"
+      video.play();
+    }
+
+    function updateClothes() {
+      var task = document.getElementById("clothes-video-menu").value;
+
+      console.log("updateclothes", task)
+
+      var img = document.getElementById("clothes-img");
+      img.src = "media/fold-strategies/" + 
+                  task + 
+                  ".jpeg"
+
+      var video = document.getElementById("clothes-video");
+      video.src = "media/videos/fold-" + 
+                  task + 
+                  ".mp4"
+      video.play();
+    }
+
+    function updateInteractiveOnlineRecons() {
+      var dataset = document.getElementById("interactive-menu-online-recon").value;
+      var carousel = document.getElementById("results-carousel-online-recon");
+
+      // 获取所有视频元素
+      var videos = carousel.querySelectorAll(".online-recon-video");
+
+      videos.forEach(video => {
+          // 获取场景名称
+          var source = video.querySelector("source");
+          var sceneName = source.src.split("/").pop().split(".")[0];
+          // 更新视频来源
+          source.src = "./media/videos/online_recon/" + dataset + "/" + sceneName + ".mp4";
+          // 重新加载视频
+          video.load();
+      });
+    }
+
+  </script>
+
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
+        rel="stylesheet">
+
+  <link rel="stylesheet" href="./static/css/bulma.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./static/css/index.css">
+
+  <link rel="stylesheet" href="./static/source_serif_4.css">
+  <link rel="stylesheet" href="./static/source_sans_3.css">  
+  <link rel="stylesheet" href="./static/academicons.min.css">
+  <link rel="stylesheet" href="./static/fontawesome/css/fontawesome.css">
+  <link rel="stylesheet" href="./static/fontawesome/css/brands.css">
+  <link rel="stylesheet" href="./static/fontawesome/css/light.css">
+
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="./static/js/fontawesome.all.min.js"></script>
+  <script src="./static/js/bulma-carousel.min.js"></script>
+  <script src="./static/js/bulma-slider.min.js"></script>
+  <script src="./static/js/index.js"></script>
+  <script src="./static/js/video_comparison.js"></script>
+</head>
+<body onload="updateInTheWild();updateBimanual();">
+
+<section class="hero">
+  <div class="hero-body">
+    <div class="container is-fullhd">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+            <h1 class="title is-1 publication-title">ActiveSplat: High-Fidelity Scene Reconstruction<br>through Active Gaussian Splatting</h1>
+            <div class="is-size-5 publication-authors">
+                <span class="author-block">
+                    <a target="_blank" href="https://li-yuetao.github.io/">Yuetao Li</a><sup>1,2*</sup>,
+                </span>
+                <span class="author-block">
+                    <a target="_blank" >Zijia Kuang</a><sup>2*</sup>,
+                </span>
+                <span class="author-block">
+                    <a target="_blank" >Ting Li</a><sup>2</sup>,
+                </span>
+                <span class="author-block">
+                    <a target="_blank" >Guyue Zhou</a><sup>2</sup>,
+                </span>
+                <span class="author-block">
+                    <a target="_blank" >Shaohui Zhang</a><sup>1</sup>,
+                </span>
+                <span class="author-block">
+                    <a target="_blank" href="https://zikeyan.github.io/">Zike Yan</a><sup>2</sup>
+                </span>
+            </div>
+          <div class="is-size-5 affiliation">
+            <sup>1</sup>Beijing Institute of Technology,
+            <sup>2</sup>AIR, Tsinghua University
+          </div>
+          <br>
+          <div class="affiliation-note">
+            <sup>*</sup> indicates equal contributions
+          </div>
+          <div class="button-container">
+            <a href="./ActiveSplat.pdf" target="_blank" class="button"><i class="fa-light fa-file"></i>&emsp14;PDF</a>
+            <a href="http://arxiv.org/abs/2410.21955" target="_blank" class="button"><i class="ai ai-arxiv"></i>&emsp14;arXiv</a>
+            <a href="https://youtu.be/444RW0t7FBs" target="_blank" class="button"><i class="fa-light fa-film"></i>&emsp14;Video</a>
+            <a target="_blank" class="button_width"><i class="fa-light fa-code"></i>&emsp14;Code(coming soon)</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="hero teaser">
+  <div class="container is-max-widescreen">
+    <div class="hero-body">
+      <div class="container">
+        <div class="columns is-vcentered is-centered">
+          <img src="media/figures/teaser.png" class="method-image" alt="Teaser" style="width: 80%;">
+          </br>
+        </div>
+        <br>
+        <h2 class="subtitle has-text-centered">
+          <span class="dperact">ActiveSplat</span> enables the agent to explore the environment autonomously to build a 3D map on the fly. The integration of a Gaussian map and a Voronoi graph assures efficient and complete exploration with high-fidelity reconstruction results.
+        </h2>
+      </div>
+    </div>
+  </div>
+
+<div class="container is-max-widescreen">
+<div class="columns is-centered has-text-centered">
+  <div class="column is-four-fifths">
+    <h2 class="title is-3">Abstract</h2>
+    <div class="content has-text-justified">
+      <p>
+        We propose <b>ActiveSplat</b>, an autonomous high-fidelity reconstruction system leveraging Gaussian splatting. 
+        Taking advantage of efficient and realistic rendering, the system establishes a unified framework for online mapping, 
+        viewpoint selection, and path planning. The key to ActiveSplat is a hybrid map representation that integrates both dense information about the environment and a sparse abstraction of the workspace. 
+        Therefore, the system leverages sparse topology for efficient viewpoint sampling and path planning, while exploiting view-dependent dense prediction for viewpoint selection, 
+        facilitating efficient decision-making with promising accuracy and completeness. 
+        A hierarchical planning strategy based on the topological map is adopted to mitigate repetitive trajectories and 
+        improve local granularity given limited budgets, ensuring high-fidelity reconstruction with photorealistic view synthesis. 
+        Extensive experiments and ablation studies validate the efficacy of the proposed method in terms of reconstruction accuracy, data coverage, and exploration efficiency.
+      </p>
+    </div>
+  </div>
+</div>
+
+<hr class="rounded">
+<div class="rows">
+  <h2 class="title is-3">Walkthrough Video</h2>
+  <div class="publication-video">
+      <iframe src="https://www.youtube.com/embed/444RW0t7FBs" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+  </div>
+</div>
+
+<hr class="rounded">
+<div class="rows">
+    <h2 class="title is-3">Overview of ActiveSplat</h2>
+    <img src="media/figures/system-overview-v3.png" class="method-image" alt="System Overview">
+    <p class="content has-text-justified">The autonomous reconstruction system employs a hybrid map that incorporates both dense predictions and sparse topological abstractions, 
+      balancing exploration efficiency with reconstruction accuracy. Splatting Gaussians of interest on the fly forms a 
+      consistent manner for online map updating, viewpoint selection, and path planning. 
+      <strong>Note:</strong> Subregions are distinguished by node color, with node scores indicated by color intensity.
+
+        
+    </p>
+</div>
+
+<hr class="rounded">
+
+<div class="rows">
+  <h2 class="title is-3">Online Active Mapping</h2>
+
+  <p class="content has-text-justified">
+    We conduct extensive experiments on the 
+    <a href="http://gibsonenv.stanford.edu/database/">Gibson</a> 
+    and <a href="https://niessner.github.io/Matterport/">Matterport3D</a> datasets. The online mapping process(x10 speed) is as follows:
+  </p>
+
+  <div class="columns">
+    <div class="column has-text-centered">
+      <div class="select is-rounded">     
+        <select id="interactive-menu-online-recon" onchange="updateInteractiveOnlineRecons()">
+          <option value="Gibson" selected="selected">Gibson</option>
+          <option value="Matterport3D">Matterport3D</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="results-carousel-online-recon" class="carousel results-carousel">
+      <div class="item item-online-recon-run-0">
+        <video poster="" class="online-recon-video" autoplay controls muted loop playsinline height="100%" data-scene-name="Denmark">
+          <source src="./media/videos/online_recon/Gibson/run-0.mp4" type="video/mp4">
+        </video>
+      </div>
+      <div class="item item-online-recon-run-1">
+        <video poster="" class="online-recon-video" autoplay controls muted loop playsinline height="100%" data-scene-name="Eudora">
+          <source src="./media/videos/online_recon/Gibson/run-1.mp4" type="video/mp4">
+        </video>
+      </div>
+      <div class="item item-online-recon-run-2">
+        <video poster="" class="online-recon-video" autoplay controls muted loop playsinline height="100%" data-scene-name="gZ6f7yhEvPG">
+          <source src="./media/videos/online_recon/Gibson/run-2.mp4" type="video/mp4">
+        </video>
+      </div>
+      <div class="item item-online-recon-run-3">
+        <video poster="" class="online-recon-video" autoplay controls muted loop playsinline height="100%" data-scene-name="pLe4wQe7qrG">
+          <source src="./media/videos/online_recon/Gibson/run-3.mp4" type="video/mp4">
+        </video>
+      </div>
+      <div class="item item-online-recon-run-4">
+        <video poster="" class="online-recon-video" autoplay controls muted loop playsinline height="100%" data-scene-name="pLe4wQe7qrG">
+          <source src="./media/videos/online_recon/Gibson/run-4.mp4" type="video/mp4">
+        </video>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<hr class="rounded">
+<div class="rows">
+  <h2 class="title is-3">Reconstruction results</h2>
+
+  <p class="content has-text-justified">We further apply adaptive density controls and additional optimization
+    (e.g. <a href="https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/">3DGS</a>,
+    <a href="https://surfsplatting.github.io/">2DGS</a>)
+     to refine the online-constructed map given stored keyframe data.</p>
+
+  <img src="media/figures/reconstruction-results.png" class="method-image" />
+  <p class="content has-text-justified">The autonomous reconstruction results in photorealistic rendering and accurate geometry.
+  </p>
+  
+  <div class="container">
+    <div id="results-carousel-offline-recon" class="carousel results-carousel">
+
+      <div class="column is-centered">
+        <div class="video-compare-container" id="materialsDiv1">
+          <video class="video" id="materials1" loop playsinline muted src="media/videos/offline/Denmark.mp4" onplay="resizeAndPlay(this)"></video>
+          <canvas height=0 class="videoMerge" id="materials1Merge" style="border-radius: 10px;"></canvas>
+        </div>
+      </div>
+
+      <div class="column is-centered">
+        <div class="video-compare-container" id="materialsDiv2">
+          <video class="video" id="materials2" loop playsinline muted src="media/videos/offline/Eudora.mp4" onplay="resizeAndPlay(this)"></video>
+          <canvas height=0 class="videoMerge" id="materials2Merge" style="border-radius: 10px;"></canvas>
+        </div>
+      </div>
+
+      <div class="column is-centered">
+        <div class="video-compare-container" id="materialsDiv3">
+          <video class="video" id="materials3" loop playsinline muted src="media/videos/offline/Greigsville.mp4" onplay="resizeAndPlay(this)"></video>
+          <canvas height=0 class="videoMerge" id="materials3Merge" style="border-radius: 10px;"></canvas>
+        </div>
+      </div>
+
+      <div class="column is-centered">
+        <div class="video-compare-container" id="materialsDiv4">
+          <video class="video" id="materials4" loop playsinline muted src="media/videos/offline/Elmira.mp4" onplay="resizeAndPlay(this)"></video>
+          <canvas height=0 class="videoMerge" id="materials4Merge" style="border-radius: 10px;"></canvas>
+        </div>
+      </div>
+
+      <div class="column is-centered">
+        <div class="video-compare-container" id="materialsDiv5">
+          <video class="video" id="materials5" loop playsinline muted src="media/videos/offline/gZ6f7yhEvPG.mp4" onplay="resizeAndPlay(this)"></video>
+          <canvas height=0 class="videoMerge" id="materials5Merge" style="border-radius: 10px;"></canvas>
+        </div>
+      </div>
+
+      <div class="column is-centered">
+        <div class="video-compare-container" id="materialsDiv6">
+          <video class="video" id="materials6" loop playsinline muted src="media/videos/offline/GdvgFV5R1Z5.mp4" onplay="resizeAndPlay(this)"></video>
+          <canvas height=0 class="videoMerge" id="materials6Merge" style="border-radius: 10px;"></canvas>
+        </div>
+      </div>
+
+      <div class="column is-centered">
+        <div class="video-compare-container" id="materialsDiv7">
+          <video class="video" id="materials7" loop playsinline muted src="media/videos/offline/YmJkqBEsHnH.mp4" onplay="resizeAndPlay(this)"></video>
+          <canvas height=0 class="videoMerge" id="materials7Merge" style="border-radius: 10px;"></canvas>
+        </div>
+      </div>
+
+      <div class="column is-centered">
+        <div class="video-compare-container" id="materialsDiv8">
+            <video class="video" id="materials8" loop playsinline muted src="media/videos/offline/Quantico.mp4" onplay="resizeAndPlay(this)"></video>
+            <canvas height=0 class="videoMerge" id="materials8Merge" style="border-radius: 10px;"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  bulmaCarousel.attach('#results-carousel-offline-recon', {
+    slidesToScroll: 1,
+    slidesToShow: 2,
+    infinite: true,
+    autoplay: false,
+  });
+</script>
+
+<hr class="rounded">
+<div class="rows">
+    <h2 class="title is-3">Compare with other methods</h2>
+    <div class="columns">
+      <div class="column">
+          <img src="media/figures/compare-results-quanti.png" class="method-image" />
+          <p class="content has-text-justified">
+              <strong>Quantitative comparison results</strong>: Comparison against relevant methods regarding the completeness of the observed data.
+          </p>
+      </div>
+      <div class="column">
+          <img src="media/figures/compare-results-quali.png" class="method-image" />
+          <p class="content has-text-justified">
+              <strong>Qualitative comparison results</strong>: The novel view synthesis results of ours compared to the NeRF-based active mapping on Gibson and MP3D datasets.
+          </p>
+      </div>
+    </div>
+</div>
+
+<hr class="rounded">
+<div class="rows">
+    <h2 class="title is-3">Ablation Study</h2>
+    <p class="content has-text-justified">To validate the rationale behind our solution, 
+      we conduct ablation studies in different modules to justify the effectiveness of each strategy for high-fidelity reconstruction.</p>
+
+    <p class="content has-text-justified">We use four different strategy settings:
+    (1) <strong>Random</strong> denotes the random selection of unvisited Voronoi nodes; 
+    (2) <strong>Position</strong> denotes exploration with only node selection but ignoring the target rotations; 
+    (3) <strong>Viewpoint</strong> denotes the decoupled selection of both view positions and rotations; 
+    (4) <strong>Ours</strong> incorporates multi-connected regions and hierarchical planning during the navigation. 
+    </p>
+    
+    <div class="columns">
+      <div class="column">
+          <img src="media/figures/ablation-results-table-policy.png" class="method-image" />
+          <p class="content has-text-justified">
+              <strong>Ablation of exploration strategy</strong>: Different exploration strategies lead to diverse behaviors for efficiency-accuracy tradeoffs.
+          </p>
+      </div>
+      <div class="column">
+          <img src="media/figures/ablation-results-table-coverage.png" class="method-image" />
+          <p class="content has-text-justified">
+              <strong>Ablation of coverage evaluation</strong>: Merely 2D or 3D way of quantifying invisible areas does not best guide the agent.
+          </p>
+      </div>
+    </div>
+
+    <div class="columns">
+      <div class="column">
+          <img src="media/figures/ablation-results-table-post.png" class="method-image" />
+          <p class="content has-text-justified">
+              <strong>Ablation of post-processing</strong>: The reconstruction results before and after post-processing.
+          </p>
+      </div>
+      <div class="column">
+          <img src="media/figures/ablation-results-table-hierach-plan.png" class="method-image" />
+          <p class="content has-text-justified">
+              <strong>Ablation of hierarchical planning</strong>: Hierarchical Planning (HP) enables the agent to achieve higher reconstruction completeness with shorter path lengths (P.L.).
+          </p>
+      </div>
+    </div>
+
+    <img src="media/figures/ablation-hierarch.png" class="method-image" />
+    <p class="content has-text-justified"><strong>Ablation of hierarchical planning (scene ID: <span class="dperact">Quantico</span>)</strong>: 
+      The online reconstruction progress with increased completeness (%) and path length (m) at different stages (25%, 50%, 75%, 100%). 
+      The hierarchical planning strategy results in better completeness and reduced path length during the exploration.
+    </p>
+    <p class="content has-text-justified">
+      The proposed hierarchical planning strategy ensures that the agent thoroughly observes the surroundings of 
+      nodes within a local sub-region before confidently transitioning to the next sub-region, thereby optimizing the global exploration path. 
+      The following are the comparison results in the Gibson-Quantico and MP3D-RPmz2sHmrrY scenes:
+    </p>
+    <div class="container">
+      <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <h3 class="subtitle">w/o subregion</h3>
+          </div>
+          <div class="column has-text-centered">
+            <h3 class="subtitle">w subregion</h3>
+          </div>
+      </div>
+      <div id="results-carousel-hierarchical-plan" class="carousel results-carousel">
+        <div class="column has-text-centered">
+          <video id="dist1"
+            controls autoplay loop muted
+            width="100%">
+            <source src="media/videos/hierarchical-planning/Quantico-subregion.mp4" 
+            type="video/mp4">
+          </video>
+        </div>
+    
+        <div class="column has-text-centered">
+          <video id="dist1"
+            controls autoplay loop muted
+            width="100%">
+            <source src="media/videos/hierarchical-planning/RPmz2sHmrrY-subregion.mp4" 
+            type="video/mp4">
+          </video>
+        </div>
+      </div>
+    </div>
+</div>
+
+<script>
+  bulmaCarousel.attach('#results-carousel-hierarchical-plan', {
+    slidesToScroll: 1,
+    slidesToShow: 1,
+    infinite: true,
+    autoplay: false,
+  });
+</script>
+
+<hr class="rounded">
+
+<h2 class="title is-3">BibTeX</h2>
+<p class="bibtex">
+    @article{li2024activesplat, <br>
+        &nbsp;&nbsp;title = {ActiveSplat: High-Fidelity Scene Reconstruction through Active Gaussian Splatting}, <br>
+        &nbsp;&nbsp;author = {Li, Yuetao and Kuang, Zijia and Li, Ting and Zhou, Guyue and Zhang, Shaohui and Yan, Zike}, <br>
+        &nbsp;&nbsp;journal = {arXiv preprint arXiv:2410.21955}, <br>
+        &nbsp;&nbsp;year = {2024} <br>
+    }
+</p>
+
+</section>
+</div>
+
+<footer class="footer">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column">
+        <div class="content has-text-centered">
+          <p>
+            Website template borrowed from <a href="https://rekep-robot.github.io/">ReKep</a>
+            and <a href="https://nerfies.github.io/">Nerfies</a>. 
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const videos = document.querySelectorAll("video");
+    const teaserVideo = document.getElementById("teaser");
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        const video = entry.target;
+        if (video !== teaserVideo) {
+          if (entry.isIntersecting) {
+            video.play();
+          } else {
+            video.pause();
+          }
+        }
+      });
+    });
+
+    videos.forEach(video => {
+      if (video !== teaserVideo) {
+        observer.observe(video);
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

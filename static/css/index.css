@@ -1,0 +1,335 @@
+body {
+  /* font-family: 'Noto Sans', sans-serif; */
+  font-family: 'Google Sans', sans-serif;
+}
+
+
+.footer .icon-link {
+    font-size: 1em;
+    color: #000;
+}
+
+.link-block a {
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+.dnerf {
+  font-variant: small-caps;
+}
+
+.dperact {
+  font-variant: small-caps;
+}
+
+.teaser .hero-body {
+  padding-top: 0;
+}
+
+.teaser {
+  font-family: 'Google Sans', sans-serif;
+}
+
+.teaser video {
+  object-fit: fill;
+  
+}
+#glass{
+  margin-left: -10px;
+}
+
+.publication-title {
+  font-family: 'Google Sans', sans-serif;
+  /* color: #8C1515; */
+}
+
+.publication-banner {
+  max-height: parent;
+
+}
+
+.publication-banner video {
+  position: relative;
+  left: auto;
+  top: auto;
+  transform: none;
+  object-fit: fit;
+}
+
+.publication-header .hero-body {
+}
+
+.publication-title {
+    font-family: 'Google Sans', sans-serif;
+}
+
+.publication-authors {
+    font-family: 'Google Sans', sans-serif;
+}
+
+.publication-venue {
+    color: #555;
+    width: fit-content;
+    font-weight: bold;
+}
+
+.publication-awards {
+    color: #ff3860;
+    width: fit-content;
+    font-weight: bolder;
+}
+
+.publication-authors a {
+    color: hsl(204, 86%, 53%) !important;
+}
+
+.conference-authors a {
+   color: #000000 !important;
+}
+
+.publication-authors a:hover {
+    text-decoration: underline;
+    color: #414141 !important;
+}
+
+.author-block {
+  display: inline-block;
+}
+
+.video-compare-container {
+  width: 100%;
+  margin: 0 auto;
+  position: relative;
+  display: block;
+  line-height: 0;
+}
+
+.video {
+  width: 100%;
+  height: auto;
+  position: relative;
+  top: 0;
+  left: 0;
+  display: block;
+}
+
+.videoMerge {
+  position: relative;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  width: 100%;
+  display: block;
+  margin: 0 auto;
+  background-size: cover;
+}
+
+.publication-video {
+    position: relative;
+    width: 100%;
+    height: 0;
+    padding-bottom: 56.25%;
+
+    overflow: hidden;
+    border-radius: 10px !important;
+}
+
+.publication-video iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.publication-body img {
+}
+
+.results-carousel {
+  overflow: hidden;
+}
+
+.results-carousel .item {
+  margin: 5px;
+  overflow: hidden;
+  border: 1px solid #bbb;
+  border-radius: 10px;
+  padding: 0;
+  font-size: 0;
+}
+
+.results-carousel video {
+  margin: 0;
+}
+
+.interpolation-panel {
+  background: #f5f5f5;
+  border-radius: 10px;
+}
+
+.interpolation-panel .interpolation-image {
+  width: 100vh;
+  background-size: cover;
+  border-radius: 5px;
+}
+
+.interpolation-video-column {
+}
+
+.interpolation-panel .slider {
+  margin: 0 !important;
+}
+
+.interpolation-panel .slider {
+  margin: 0 !important;
+}
+
+#interpolation-image-wrapper {
+  width: 100%;
+}
+#interpolation-image-wrapper img {
+  border-radius: 5px;
+}
+
+img.method-image {
+    padding: 0;
+    display: block;
+    margin: 0 auto;
+    max-height: 100%;
+    max-width: 100%;
+    height: auto;
+}
+
+ .dropdown-item{
+    white-space: pre-wrap;
+}
+
+
+.justify {
+  text-align: justify;
+}
+
+.button-container {
+  color: #53565A;
+  justify-items: center;
+  padding-top: 0.5em;
+  justify-content: center;
+  display: flex;
+}
+
+.button {
+  color: #53565A;
+  font-family: 'Google Sans', sans-serif;
+  border-radius: 0.5em;
+  width: 6em;
+  height: 2.2em;
+  margin-left: 0.4em;
+  margin-right: 0.4em;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.1em;
+  text-align: right;
+  vertical-align: middle;
+  border: solid 0px transparent;
+  background-color: #f2f2f2;
+}
+
+.button_width {
+    color: #53565A;
+    font-family: 'Google Sans', sans-serif;
+    border-radius: 0.5em;
+    width: 12em;
+    height: 2.2em;
+    margin-left: 0.4em;
+    margin-right: 0.4em;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.1em;
+    text-align: right;
+    vertical-align: middle;
+    border: solid 0px transparent;
+    background-color: #f2f2f2;
+  }
+
+.button:hover {
+  background-color: #f2f2f2;
+  filter: brightness(97%);
+}
+
+/* https://html-online.com/articles/gradient-background-buttons-css-html/ */
+.gradient-button {
+  text-align: center;
+  background-size: 200% auto;
+  transition: all 0.3s cubic-bezier(.25, .8, .25, 1);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.gradient-button:hover {
+  background-position: right center;
+}
+
+.w-button {
+  display: inline-block;
+  padding: 9px 15px;
+  background-color: #3898ec;
+  color: #fff;
+  border: 0;
+  line-height: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: 0
+}
+
+.affiliation {
+  display: inline-block;
+  color: #2c2c2c;
+  font-family: 'Google Sans', sans-serif;
+  padding-top: 0.8em;
+  /* padding-bottom: 0.5em; */
+  text-align: center;
+}
+
+.affiliation-note {
+  display: inline-block;
+  color: #828282;
+  font-family: 'Google Sans', sans-serif;
+  font-size: 1.2em;
+  /* padding-top: 0.5em; */
+  padding-bottom: 0.8em;
+  text-align: center;
+}
+
+hr.rounded {
+  background: #cbcbcb;
+  border-radius: 15px;
+  /* max-height: 2px; */
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  mix-blend-mode: normal;
+  border: none;
+}
+
+.bibtex {
+  font-family: "Courier", monospace;
+  font-size: 1.0em !important;
+  color: #2f2f2f;
+  background-color: #f2f2f2;
+  border: 5px;
+  border-color: #2f2f2f;
+  border-radius: 10px;
+  margin-top: 0.6em;
+  margin-bottom: 3em;
+  padding-top: 0.6em;
+  padding-bottom: 0.6em;
+  vertical-align: center;
+  padding-left: 0.5em;
+  padding-right: 0.5em;
+  hyphens: none !important;
+  line-height: unset !important;
+}
