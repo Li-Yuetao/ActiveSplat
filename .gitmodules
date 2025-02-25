@@ -1,0 +1,10 @@
+
+[submodule "submodules/diff-gaussian-rasterization"]
+	path = submodules/diff-gaussian-rasterization
+	url = https://github.com/Li-Yuetao/diff-gaussian-rasterization.git
+[submodule "submodules/habitat/habitat-lab"]
+	path = submodules/habitat/habitat-lab
+	url = https://github.com/facebookresearch/habitat-lab.git
+[submodule "submodules/habitat/habitat-sim"]
+	path = submodules/habitat/habitat-sim
+	url = https://github.com/facebookresearch/habitat-sim.git

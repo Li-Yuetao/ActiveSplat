@@ -1,0 +1,61 @@
+defaults:
+  - /habitat: habitat_config_base
+  - /habitat/task: pointnav
+  - /habitat/simulator/agents@habitat.simulator.agents.main_agent: rgbd_agent
+  - _self_
+
+habitat:
+  environment:
+    max_episode_steps: 500
+
+  task:
+    type: Nav-v0
+    actions:
+      stop:
+        type: StopAction
+      move_forward:
+        type: MoveForwardAction
+      turn_left:
+        type: TurnLeftAction
+      turn_right:
+        type: TurnRightAction
+    lab_sensors:
+      pointgoal_with_gps_compass_sensor:
+        type: PointGoalWithGPSCompassSensor
+        goal_format: POLAR
+        dimensionality: 2
+    goal_sensor_uuid: pointgoal_with_gps_compass
+    measurements:
+      success:
+        success_distance: 0.2
+
+  simulator:
+    turn_angle: 10
+    tilt_angle: 15
+    forward_step_size: 0.065
+    action_space_config: "v1"
+    agents:
+      main_agent:
+        sim_sensors:
+          rgb_sensor:
+            width: 256
+            height: 256
+            hfov: 90
+            position: [0, 1.25, 0]
+          depth_sensor:
+            width: 256
+            height: 256
+            min_depth: 0.0
+            max_depth: 10.0
+            hfov: 90
+            position: [0, 1.25, 0]
+    habitat_sim_v0:
+      gpu_device_id: 0
+      allow_sliding: False
+      gpu_gpu: True
+
+  dataset:
+    type: PointNav-v1
+    split: test
+    scenes_dir: ""
+    data_path: ""

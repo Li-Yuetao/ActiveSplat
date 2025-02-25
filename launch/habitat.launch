@@ -1,0 +1,23 @@
+<launch>
+    <arg name="mapper" default="SplaTAM"/>
+    <arg name="config" default="$(find activesplat)/config/datasets/gibson.json"/>
+    <arg name="scene_id" default="None"/>
+    <arg name="gpu_id" default="0"/>
+    <arg name="user_config" default="$(find activesplat)/config/user_config.json"/>
+    <arg name="mode" default="AUTO_PLANNING"/>
+    <arg name="actions" default="None"/>
+    <arg name="parallelized" default="0"/>
+    <arg name="debug" default="0"/>
+    <arg name="hide_mapper_windows" default="0"/>
+    <arg name="hide_planner_windows" default="0"/>
+    <arg name="step_num" default="-1"/>
+    <arg name="remark" default="NONE"/>
+    <arg name="save_runtime_data" default="0"/>
+
+    <param name="step_num" value="$(arg step_num)"/>
+
+    <node pkg="activesplat" name="mapper_node" type="mapper_node.py" output="screen" args="--mapper $(arg mapper) --config $(arg config) --scene_id $(arg scene_id) --user_config $(arg user_config) --gpu_id $(arg gpu_id) --mode $(arg mode) --actions $(arg actions) --parallelized $(arg parallelized) --hide_windows $(arg hide_mapper_windows) --save_runtime_data $(arg save_runtime_data) --debug $(arg debug) --remark $(arg remark)"/>
+
+    <node pkg="activesplat" name="planner_node" type="planner_node.py" output="screen" args="--config $(arg config) --hide_windows $(arg hide_planner_windows) --save_runtime_data $(arg save_runtime_data) --debug $(arg debug)"/>
+
+</launch>

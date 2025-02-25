@@ -1,0 +1,6 @@
+bool                    arrived_flag
+---
+bool[]                  free_map
+bool[]                  visible_map
+geometry_msgs/Point     horizon_bound_min
+geometry_msgs/Point     horizon_bound_max

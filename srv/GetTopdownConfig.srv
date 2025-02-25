@@ -1,0 +1,10 @@
+---
+uint8       topdown_x_world_dim_index
+uint8       topdown_y_world_dim_index
+float64     topdown_x_world_lower_bound
+float64     topdown_x_world_upper_bound
+float64     topdown_y_world_lower_bound
+float64     topdown_y_world_upper_bound
+uint32      topdown_x_length
+uint32      topdown_y_length
+float64     meter_per_pixel

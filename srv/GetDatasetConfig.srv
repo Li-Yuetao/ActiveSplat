@@ -1,0 +1,24 @@
+---
+float64               agent_forward_step_size
+float64               agent_turn_angle
+float64               agent_tilt_angle
+float64               agent_height
+float64               agent_radius
+uint32                rgbd_height
+uint32                rgbd_width
+float64               rgbd_fx
+float64               rgbd_fy
+float64               rgbd_cx
+float64               rgbd_cy
+float64               rgbd_depth_min
+float64               rgbd_depth_max
+float64               rgbd_depth_scale
+geometry_msgs/Point   rgbd_position
+float64               rgbd_downsample_factor
+string                scene_mesh_url
+geometry_msgs/Pose    scene_mesh_transform
+geometry_msgs/Point   scene_bound_min
+geometry_msgs/Point   scene_bound_max
+string                pose_data_type
+uint32                height_direction
+string                results_dir

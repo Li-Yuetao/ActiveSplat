@@ -1,0 +1,14 @@
+.vscode/
+logs/
+.idea/
+__pycache__/
+
+config/user_config.json
+results/
+data/
+typings/
+
+build/
+dist/
+*.egg-info/
+.DS_Store

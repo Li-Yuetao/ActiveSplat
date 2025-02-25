@@ -1,0 +1,62 @@
+{
+    "env": {
+        "config": "config/env/activesplat_pointnav.yaml"
+    },
+    "dataset": {
+        "format": "gibson",
+        "scene_id": "Denmark",
+        "remark": "",
+        "step_num": 1000,
+        "sc_factor": 1,
+        "depth_scale": 1,
+        "downsample": 1,
+        "translation": [0, 0, 0],
+        "bbox": [
+            [null, null, null],
+            [null, null, null]
+        ],
+        "near": 0,
+        "far": 4
+    },
+    "painter": {
+        "grid_map": {
+            "pixel_max": 360
+        },
+        "render_rgbd_downsample": 1
+    },
+    "planner": {
+        "step_num_as_visited": 10,
+        "step_num_as_arrived": 1.5,
+        "obstacle_approx_precision": 7.5,
+        "local_view_limit": 5,
+        "radius_num_as_rotated": 3.0,
+        "max_pitch_angle": 45,
+        "agent_foot_adjust": 0.0
+    },
+    "mapper": {
+        "splatam_cfg_path": "config/splatam/online_habitat_sim.py",
+        "densify_downscale_factor": 1,
+        "map_every": 5,
+        "keyframe_every": 5,
+        "mapping_window_size": 12,
+        "mapping_iters": 2,
+        "single_floor": {
+            "enable": 1,
+            "expansion": {
+                "foot": 0.25,
+                "head": 2.0
+            }
+        },
+        "bbox_padding_ratio": 0.05,
+        "interval_max_ratio": 10.0,
+        "pose": {
+            "rot_rep": "axis_angle",
+            "optim_cur": 1,
+            "update_threshold": {
+                "translation": 0.01,
+                "rotation": 5
+            }
+        },
+        "cluster_invisibility_threshold": 25
+    }
+}

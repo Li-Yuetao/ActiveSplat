@@ -1,0 +1,7 @@
+bool                    arrived_flag
+geometry_msgs/Point[]   nodes
+int32[]                 nodes_id
+---
+geometry_msgs/Pose[]    targets_frustums
+float32[]               targets_frustums_invisibility
+float32[]               targets_frustums_volume

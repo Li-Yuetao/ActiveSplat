@@ -1,0 +1,6 @@
+---
+float32[]               voronoi_graph_3d_points
+float32[]               voronoi_graph_3d_lines
+float32[]               nodes_position_3d
+float32[]               nodes_score
+float32[]               high_connectivity_nodes_3d
