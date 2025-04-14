@@ -125,6 +125,30 @@ roslaunch activesplat habitat.launch config:=config/datasets/gibson.json scene_i
 # e.g. MP3D-pLe4wQe7qrG
 roslaunch activesplat habitat.launch config:=config/datasets/mp3d.json scene_id:=pLe4wQe7qrG
 ```
+<details>
+  <summary>[Result folder structure (click to expand)]</summary>
+
+```bash
+  2025-04-13_22-34-21_gibson_Eudora
+    ├── gaussians_data
+    │   ├── depth
+    │   ├── keyframes
+    │   ├── rgb
+    │   ├── config.py
+    │   ├── params.npz
+    │   └── transforms.json
+    ├── render_rgbd # save_runtime_data:=1
+    ├── runtime_data # save_runtime_data:=1
+    ├── subregion_map # save_runtime_data:=1
+    ├── subregion_map # save_runtime_data:=1
+    ├── topdown_map # save_runtime_data:=1
+    ├── actions.txt
+    ├── config.json
+    ├── gt_mesh.json
+    ├── topdown_free_map.png
+    └── visited_map.png
+```
+</details>
 
 #### Batch scenes
 Here the system will run active mapping on 13 scenes ([gibson_small.txt](./scripts/batch/gibson_small.txt), [gibson_big.txt](./scripts/batch/gibson_big.txt), [mp3d_small.txt](./scripts/batch/mp3d_small.txt), [mp3d_big.txt](./scripts/batch/mp3d_big.txt)) in the Gibson & MP3D datasets. The results will be saved in the `results` folder.
