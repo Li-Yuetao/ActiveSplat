@@ -8,7 +8,7 @@
     ·
     <a href="https://laura-ting.github.io/"><strong>Ting Li</strong></a><sup>2</sup>
     ·
-    <a ><strong>Qun Hao</strong></a><sup>1</sup>
+    <a href=""><strong>Qun Hao</strong></a><sup>1</sup>
     ·
     <a href="https://air.tsinghua.edu.cn/en/info/1046/1196.htm"><strong>Guyue Zhou</strong></a><sup>2</sup>
     ·
