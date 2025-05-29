@@ -8,11 +8,13 @@
     ·
     <a href="https://laura-ting.github.io/"><strong>Ting Li</strong></a><sup>2</sup>
     ·
+    <a ><strong>Qun Hao</strong></a><sup>1</sup>
+    ·
     <a href="https://air.tsinghua.edu.cn/en/info/1046/1196.htm"><strong>Guyue Zhou</strong></a><sup>2</sup>
     ·
-    <a href="https://scholar.google.nl/citations?hl=en&user=GDQ23eAAAAAJ&view_op=list_works"><strong>Shaohui Zhang</strong></a><sup>1</sup>
-    ·
     <a href="https://zikeyan.github.io/"><strong>Zike Yan</strong></a><sup>2</sup>
+    ·
+    <a href="https://scholar.google.nl/citations?hl=en&user=GDQ23eAAAAAJ&view_op=list_works"><strong>Shaohui Zhang</strong></a><sup>1</sup>
   <p align="center">
         <sup>1</sup>Beijing Institute of Technology, <sup>2</sup>AIR, Tsinghua University
   </p>
@@ -30,6 +32,10 @@
 <div align=center> <img src="media/ui-x5.gif" width="850"/> </div>
 
 <span class="dperact">ActiveSplat</span> enables the agent to explore the environment autonomously to build a 3D map on the fly. The integration of a Gaussian map and a Voronoi graph assures efficient and complete exploration with high-fidelity reconstruction results.
+
+## 💡 News
+* **[27 May 2025]** 🎉 Our paper **ActiveSplat** has been accepted to **IEEE RA-L 2025**!
+* **[25 Feb 2025]** 🚀 The source code of **ActiveSplat** is now **publicly available**!
 
 ## 🛠️ Installation
 
@@ -172,7 +178,7 @@ python scripts/batch/eval_results_actions.py --results_dir ./results --gpu_id 0
 
 ## ✏️ Acknowledgments
 
-Our implementation is built upon <a href="https://github.com/kzj18/activeINR-S">activeINR-S</a>. We would also like to thank the authors of the following open-source repositories:
+Our implementation is built upon <a href="https://github.com/kzj18/activeINR-S">ANM-S</a>. We would also like to thank the authors of the following open-source repositories:
 
 - <a href="https://github.com/spla-tam/SplaTAM">SplaTAM</a> for the mapper implementation.
 - <a href="https://github.com/muskie82/MonoGS">MonoGS</a> for the online gaussian map visualization.
