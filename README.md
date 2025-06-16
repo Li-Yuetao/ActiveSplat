@@ -10,11 +10,11 @@
     ·
     <a href=""><strong>Qun Hao</strong></a><sup>1</sup>
     ·
+    <a href="https://zikeyan.github.io/"><strong>Zike Yan</strong></a><sup>2†</sup>
+    ·
     <a href="https://air.tsinghua.edu.cn/en/info/1046/1196.htm"><strong>Guyue Zhou</strong></a><sup>2</sup>
     ·
-    <a href="https://zikeyan.github.io/"><strong>Zike Yan</strong></a><sup>2</sup>
-    ·
-    <a href="https://scholar.google.nl/citations?hl=en&user=GDQ23eAAAAAJ&view_op=list_works"><strong>Shaohui Zhang</strong></a><sup>1</sup>
+    <a href="https://scholar.google.nl/citations?hl=en&user=GDQ23eAAAAAJ&view_op=list_works"><strong>Shaohui Zhang</strong></a><sup>1†</sup>
   <p align="center">
         <sup>1</sup>Beijing Institute of Technology, <sup>2</sup>AIR, Tsinghua University
   </p>
