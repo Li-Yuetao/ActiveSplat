@@ -20,6 +20,7 @@
   </p>
 
 <h3 align="center">
+    <a href="https://ieeexplore.ieee.org/abstract/document/11037548"> <img src="https://img.shields.io/badge/IEEE-RA--L-004c99"> </a>
     <a href="https://arxiv.org/abs/2410.21955" target="_blank">
     <img src="https://img.shields.io/badge/arXiv-2410.21955-blue?logo=arxiv&color=%23B31B1B" alt="Paper arXiv"></a>
     <a href="https://li-yuetao.github.io/ActiveSplat/" target="_blank">
