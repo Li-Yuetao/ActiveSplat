@@ -190,10 +190,11 @@ If you find these works helpful, please consider citing them as well.
 
 If you find our code/work useful in your research, please consider citing the following:
 ```bibtex
-@article{li2024activesplat,
-      title={ActiveSplat: High-Fidelity Scene Reconstruction through Active Gaussian Splatting},
-      author={Li, Yuetao and Kuang, Zijia and Li, Ting and Zhou, Guyue and Zhang, Shaohui and Yan, Zike},
-      journal={arXiv preprint arXiv:2410.21955},
-      year={2024}
+@article{li2025activesplat,
+    title={Activesplat: High-fidelity scene reconstruction through active gaussian splatting},
+    author={Li, Yuetao and Kuang, Zijia and Li, Ting and Hao, Qun and Yan, Zike and Zhou, Guyue and Zhang, Shaohui},
+    journal={IEEE Robotics and Automation Letters},
+    year={2025},
+    publisher={IEEE}
 }
 ```
