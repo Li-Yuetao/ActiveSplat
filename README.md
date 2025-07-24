@@ -35,7 +35,8 @@
 <span class="dperact">ActiveSplat</span> enables the agent to explore the environment autonomously to build a 3D map on the fly. The integration of a Gaussian map and a Voronoi graph assures efficient and complete exploration with high-fidelity reconstruction results.
 
 ## 💡 News
-* **[27 May 2025]** 🎉 Our paper **ActiveSplat** has been accepted to **IEEE RA-L 2025**!
+* **[16 June 2025]** 🎉 Our paper **ActiveSplat** has been officially published by **IEEE RA-L 2025**!
+* **[27 May 2025]** Our paper **ActiveSplat** has been accepted to **IEEE RA-L 2025**!
 * **[25 Feb 2025]** 🚀 The source code of **ActiveSplat** is now **publicly available**!
 
 ## 🛠️ Installation
