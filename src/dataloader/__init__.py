@@ -9,12 +9,11 @@ import quaternion
 import trimesh
 from trimesh import visual
 import open3d as o3d
-
-import rospy
+import logging
 
 from geometry_msgs.msg import Point, Pose, Quaternion
 
-from activesplat.srv import GetDatasetConfigResponse
+from activesplat.srv import GetDatasetConfig
 from utils import OPENCV_TO_OPENGL
 
 HABITAT_TRANSFORM_MATRIX = np.array([
@@ -94,7 +93,7 @@ def readMapFileNode(file_root:cv2.FileNode, deep=False):
     for key in file_root.keys():
         file_node = file_root.getNode(key)
         file_node_type = file_node.type()
-        rospy.logdebug(key, CV_FILENODE_TYPE[file_node_type], ":")
+        logging.getLogger(__name__).debug("%s %s", key, CV_FILENODE_TYPE[file_node_type])
         if file_node_type == cv2.FILE_NODE_INT:
             res[key] = int(file_node.real())
         elif file_node_type == cv2.FILE_NODE_REAL:
@@ -123,7 +122,7 @@ def readMapFileNode(file_root:cv2.FileNode, deep=False):
             raise NotImplementedError
         else:
             raise NotImplementedError
-        rospy.logdebug(res[key])
+        logging.getLogger(__name__).debug("%s", res[key])
     return res
     
 def load_scene_mesh(scene_mesh_url:str, transform_matrix:np.ndarray) -> Tuple[o3d.geometry.TriangleMesh, np.ndarray]:
@@ -195,27 +194,35 @@ class RGBDSensor:
         
 # ROS conversion functions
         
-def dataset_config_to_ros(dataset_config:dict) -> GetDatasetConfigResponse:
-    dataset_config_ros = dataset_config.copy()
-    for key, value in dataset_config.items():
-        if issubclass(type(value), (int, float, str)):
-            pass
-        elif isinstance(value, np.ndarray):
-            if value.shape == (3, ):
-                dataset_config_ros[key] = Point(*value)
-            elif value.shape == (4, 4):
-                value_ros = Pose()
-                value_ros.position = Point(*value[:3, 3])
-                value_ros.orientation = Quaternion(
-                    *np.roll(
-                        quaternion.as_float_array(quaternion.from_rotation_matrix(value[:3, :3])),
-                        -1))
-                dataset_config_ros[key] = value_ros
-            else:
-                raise ValueError(f'Invalid shape of {key}, get {type(value)}')
-        else:
-            raise ValueError(f'Invalid type of {key}, get {type(value)}')
-    return GetDatasetConfigResponse(**dataset_config_ros)
+def dataset_config_to_ros(dataset_config:dict) -> GetDatasetConfig.Response:
+    response = GetDatasetConfig.Response()
+    field_types = response.get_fields_and_field_types()
+    for key, ros_type in field_types.items():
+        value = dataset_config[key]
+        if ros_type == 'geometry_msgs/Point':
+            vector = np.asarray(value).reshape(3)
+            msg = Point()
+            msg.x, msg.y, msg.z = (
+                0.0 if item is None else float(item) for item in vector)
+            value = msg
+        elif ros_type == 'geometry_msgs/Pose':
+            matrix = np.asarray(value).reshape(4, 4)
+            quat = np.roll(
+                quaternion.as_float_array(quaternion.from_rotation_matrix(matrix[:3, :3])), -1)
+            msg = Pose()
+            msg.position.x, msg.position.y, msg.position.z = (
+                float(item) for item in matrix[:3, 3])
+            msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w = (
+                float(item) for item in quat)
+            value = msg
+        elif ros_type in ('float', 'double') or ros_type.startswith('float'):
+            value = float(value)
+        elif ros_type.startswith(('int', 'uint')):
+            value = int(value)
+        elif ros_type == 'string':
+            value = str(value)
+        setattr(response, key, value)
+    return response
 
 # Camera intrinsics conversion functions
 

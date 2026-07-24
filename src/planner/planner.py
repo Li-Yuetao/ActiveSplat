@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import List, Dict, Union, Tuple
+import logging
 import os
 import time
 import cv2
@@ -15,9 +16,9 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import colors
 
-import rospy
-
 from utils import start_timing, end_timing
+
+LOGGER = logging.getLogger(__name__)
 
 class Frustum(object):
     
@@ -151,7 +152,7 @@ def get_obstacle_map(
         contour_index_selected = contours_index_selected[np.argmin(agent_to_contours_selected)]
         local_obstacle_map_contour = global_obstacle_map_contours[contour_index_selected]
     else:
-        rospy.logwarn('Robot position is not in the obstacle map.')
+        LOGGER.warning('Robot position is not in the obstacle map.')
         global_obstacle_map_contours, _ = cv2.findContours(
             global_obstacle_map,
             cv2.RETR_EXTERNAL,
@@ -195,7 +196,7 @@ def get_obstacle_map(
             if cv2.contourArea(approx_contour) > 0:
                 obstacle_map_children_approx_contours.append(approx_contour)
     obstacle_map = cv2.drawContours(local_obstacle_map_approx.copy(), obstacle_map_children_approx_contours, -1, 0, -1)
-    rospy.logdebug(f'Get obstacle map timing: {end_timing(*get_obstacle_map_timing)} ms')
+    LOGGER.debug(f'Get obstacle map timing: {end_timing(*get_obstacle_map_timing)} ms')
     return obstacle_map, local_obstacle_map_approx_contour, obstacle_map_children_approx_contours
 
 def get_voronoi_graph(
@@ -295,7 +296,7 @@ def get_voronoi_graph(
             voronoi_graph_vertices_inaccessible_condition,
             np.logical_not(voronoi_graph_vertices_fix_condition))
         if np.any(voronoi_graph_vertices_inaccessible_condition):
-            rospy.logwarn('Inaccessible points are detected in the voronoi graph.')
+            LOGGER.warning('Inaccessible points are detected in the voronoi graph.')
         voronoi_graph_vertices_accessibile_condition = np.logical_not(voronoi_graph_vertices_inaccessible_condition)
         voronoi_graph_vertices = voronoi_graph_vertices[voronoi_graph_vertices_accessibile_condition]
         voronoi_graph_ridge_matrix = voronoi_graph_ridge_matrix[voronoi_graph_vertices_accessibile_condition][:, voronoi_graph_vertices_accessibile_condition]

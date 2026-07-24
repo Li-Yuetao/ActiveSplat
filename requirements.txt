@@ -1,9 +1,10 @@
+numpy<2
 cyclonedds
 imageio
 imgviz
 kornia
 lpips
-matplotlib
+matplotlib==3.9.3
 natsort
 open3d==0.18.0
 opencv-contrib-python

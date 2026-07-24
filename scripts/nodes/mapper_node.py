@@ -1,29 +1,127 @@
-#!/usr/bin/env python
-import os
-PACKAGE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
-SRC_PATH = os.path.abspath(os.path.join(PACKAGE_PATH, 'src'))
-import sys
-sys.path.append(PACKAGE_PATH)
-sys.path.append(SRC_PATH)
-import json
+#!/usr/bin/env python3
+
 import argparse
+import json
+import os
+import sys
+import threading
 from typing import Union
 
 import faulthandler
-
-import torch
 import numpy as np
+import torch
+
+import rclpy
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.node import Node
+from rclpy.logging import LoggingSeverity
+
 from open3d.visualization import gui
 from PIL import ImageFile, Image
+
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 Image.MAX_IMAGE_PIXELS = None
 
-import rospy
+SCRIPT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+for path in (os.path.join(SCRIPT_ROOT, "src"), os.path.dirname(__file__)):
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+from utils.path_utils import source_root
+
+PACKAGE_PATH = source_root(__file__)
+SRC_PATH = os.path.join(PACKAGE_PATH, "src")
+if SRC_PATH not in sys.path:
+    sys.path.insert(0, SRC_PATH)
 
 from mapper import MapperType
 from utils import PROJECT_NAME, GlobalState
 from dataloader.dataloader import get_dataset, HabitatDataset
 from visualizer.visualizer import Visualizer
+
+
+class MapperNode(Node):
+
+    def __init__(self, args, device):
+        super().__init__(f"{PROJECT_NAME}_mapper_node")
+
+        self.get_logger().set_level(
+            LoggingSeverity.DEBUG if args.debug else LoggingSeverity.INFO
+        )
+
+        self.declare_parameter("step_num", -1)
+
+        self.args = args
+        self.device = device
+
+        self.visualizer = None
+        self.gui_app = None
+
+    def start_pipeline(self):
+
+        args = self.args
+
+        dataset = None
+
+        os.chdir(PACKAGE_PATH)
+
+        self.get_logger().info(
+            f"Current working directory: {os.getcwd()}")
+
+        with open(args.config) as f:
+            config = json.load(f)
+
+        step_num = int(self.get_parameter("step_num").value)
+        if step_num >= 0:
+            config["dataset"]["step_num"] = step_num
+
+        if "env" in config:
+            config["env"]["config"] = os.path.abspath(
+                os.path.join(
+                    os.path.dirname(args.config),
+                    os.pardir,
+                    os.pardir,
+                    config["env"]["config"]))
+
+        if "sensor" in config:
+            config["sensor"]["config"] = os.path.abspath(
+                os.path.join(
+                    os.path.dirname(args.config),
+                    os.pardir,
+                    os.pardir,
+                    config["sensor"]["config"]))
+
+        with open(args.user_config) as f:
+            user_config = json.load(f)
+
+        dataset: Union[HabitatDataset] = get_dataset(
+            config,
+            user_config,
+            args.scene_id,
+            args.remark)
+
+        hide_windows = bool(args.hide_windows)
+
+        app = None
+        if not hide_windows:
+            app = gui.Application.instance
+            app.initialize()
+
+        self.visualizer = Visualizer(
+            MapperType(args.mapper),
+            args.config,
+            GlobalState(args.mode),
+            1 if hide_windows else app.add_font(
+                gui.FontDescription(gui.FontDescription.MONOSPACE)),
+            self.device,
+            args.actions,
+            dataset,
+            bool(args.parallelized),
+            hide_windows,
+            bool(args.save_runtime_data),
+            self)
+
+        self.gui_app = app
 
 if __name__ == '__main__':
     faulthandler.enable()
@@ -82,56 +180,57 @@ if __name__ == '__main__':
                         type=str,
                         default='NONE',
                         help='remark info.')
-    
-    args, ros_args = parser.parse_known_args()
-    
-    ros_args = dict([arg.split(':=') for arg in ros_args])
-    
-    rospy.init_node(ros_args['__name'], anonymous=True, log_level=rospy.DEBUG if bool(args.debug) else rospy.INFO)
-    
-    if args.mode == 'REPLAY' and args.actions is None:
-        parser.error('Replay mode requires actions to replay.')
-    
-    if torch.cuda.is_available():
-        device = torch.device('cuda', args.gpu_id)
-    else:
-        rospy.logwarn('No GPU available.')
-        device = torch.device('cpu')
-        
-    os.chdir(PACKAGE_PATH)
-    rospy.loginfo(f'Current working directory: {os.getcwd()}')
-    with open(args.config) as f:
-        config = json.load(f)
-        if 'env' in config:
-            config['env']['config'] = os.path.abspath(
-                os.path.join(os.path.dirname(args.config), os.pardir, os.pardir, config['env']['config']))
-        if 'sensor' in config:
-            config['sensor']['config'] = os.path.abspath(
-                os.path.join(os.path.dirname(args.config), os.pardir, os.pardir, config['sensor']['config']))
-    
-    with open(args.user_config) as f:
-        user_config = json.load(f)
-    
-    dataset:Union[HabitatDataset] = get_dataset(config, user_config, args.scene_id, args.remark)
 
-    hide_windows = bool(args.hide_windows)
-    if not hide_windows:
-        app = gui.Application.instance
-        app.initialize()
-    w = Visualizer(
-        MapperType(args.mapper),
-        args.config,
-        GlobalState(args.mode),
-        1 if hide_windows else app.add_font(gui.FontDescription(gui.FontDescription.MONOSPACE)),
-        device,
-        args.actions,
-        dataset,
-        bool(args.parallelized),
-        hide_windows,
-        bool(args.save_runtime_data))
-    if hide_windows:
-        rospy.spin()
-    else:
-        app.run()
-    
-    rospy.loginfo(f'{PROJECT_NAME} mapper node finished.')
+    args, _ = parser.parse_known_args()
+
+    if args.mode == "REPLAY" and args.actions is None:
+        parser.error("Replay mode requires actions to replay.")
+
+    device = torch.device(
+        f"cuda:{args.gpu_id}"
+        if torch.cuda.is_available()
+        else "cpu"
+    )
+
+    rclpy.init()
+
+    node = MapperNode(args, device)
+
+    executor = MultiThreadedExecutor(num_threads=4)
+    executor.add_node(node)
+
+    spin_thread = threading.Thread(
+        target=executor.spin,
+        daemon=True)
+
+    spin_thread.start()
+
+    try:
+
+        node.start_pipeline()
+
+        if node.gui_app is None:
+            node.visualizer.wait_until_finished()
+        else:
+            node.gui_app.run()
+
+    except KeyboardInterrupt:
+        pass
+
+    finally:
+        try:
+            executor.shutdown()
+        except KeyboardInterrupt:
+            pass
+        spin_thread.join(timeout=5.0)
+        try:
+            node.destroy_node()
+        except KeyboardInterrupt:
+            pass
+        try:
+            if rclpy.ok():
+                rclpy.shutdown()
+        except KeyboardInterrupt:
+            pass
+
+    print(f"{PROJECT_NAME} mapper node finished.")

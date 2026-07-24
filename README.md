@@ -41,23 +41,23 @@
 
 ## 🛠️ Installation
 
-Our environment has been tested on Ubuntu 20.04 with CUDA 11.8.
+Our environment has been tested on Ubuntu 22.04 with CUDA 11.8.
 
 Clone the repository and create the conda environment:
 
 ```bash
 mkdir -p ~/Workspace/activesplat_ws/src
-git clone git@github.com:Li-Yuetao/ActiveSplat.git ~/Workspace/activesplat_ws/src/ActiveSplat && cd ~/Workspace/activesplat_ws/src/ActiveSplat
+git clone git@github.com:Li-Yuetao/ActiveSplat.git ~/Workspace/activesplat_ws/src/activesplat && cd ~/Workspace/activesplat_ws/src/activesplat
 git submodule update --init --progress
 
 conda env create -f environment.yaml
-conda activate ActiveSplat
+conda activate activesplat
 ```
 
-Install pytorch by following the [instructions](https://pytorch.org/get-started/locally/). For torch 2.0.1 with CUDA version 11.8:
+Install pytorch by following the [instructions](https://pytorch.org/get-started/locally/). For torch 2.7.1 with CUDA version 11.8:
 
 ```bash
-pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 torchaudio==2.0.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
+pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu118
 
 pip install -r requirements.txt
 ```
@@ -65,7 +65,7 @@ pip install -r requirements.txt
 Install diff-gaussian-rasterization (Note: You should be on CUDA version: 11.8)
 
 ```bash
-cd ~/Workspace/activesplat_ws/src/ActiveSplat/submodules/diff-gaussian-rasterization
+cd ~/Workspace/activesplat_ws/src/activesplat/submodules/diff-gaussian-rasterization
 python setup.py install
 pip install .
 ```
@@ -77,10 +77,10 @@ pip install .
 [Habitat-lab](https://github.com/facebookresearch/habitat-lab) and [habitat-sim](https://github.com/facebookresearch/habitat-sim) need to be installed for simulation. We use v0.2.3 (`git checkout tags/v0.2.3`) for habitat-sim & habitat-lab and install the habitat-sim with the flag `--with-cuda`.
 
 ```bash
-cd ~/Workspace/activesplat_ws/src/ActiveSplat/submodules/habitat/habitat-lab && git checkout tags/v0.2.3
+cd ~/Workspace/activesplat_ws/src/activesplat/submodules/habitat/habitat-lab && git checkout tags/v0.2.3
 pip install -e habitat-lab
 pip install -e habitat-baselines
-cd ~/Workspace/activesplat_ws/src/ActiveSplat/submodules/habitat/habitat-sim && git checkout tags/v0.2.3
+cd ~/Workspace/activesplat_ws/src/activesplat/submodules/habitat/habitat-sim && git checkout tags/v0.2.3
 # if you have bad network, you can use the following command to speed up
 sed -i 's/https:\/\/github.com\//git@github.com:/g' .gitmodules # use `sed -i 's/git@github.com:/https:\/\/github.com\//g' .gitmodules` to restore
 git submodule update --init --progress --recursive
@@ -90,8 +90,10 @@ python setup.py install --with-cuda
 ### Build
 
 ```bash
-cd ~/Workspace/activesplat_ws/ && catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3
-echo "source ~/Workspace/activesplat_ws/devel/setup.bash" >> ~/.bashrc
+cd ~/Workspace/activesplat_ws
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select activesplat
+source install/setup.bash
 ```
 
 ## 🚀 Run
@@ -129,9 +131,9 @@ Copy the `user_config.json` file from the `config/.templates` folder to the `con
 ```bash
 # If you want to save runtime data, you can add the `save_runtime_data:=1` flag
 # e.g. Gibson-Denmark
-roslaunch activesplat habitat.launch config:=config/datasets/gibson.json scene_id:=Denmark
-# e.g. MP3D-pLe4wQe7qrG
-roslaunch activesplat habitat.launch config:=config/datasets/mp3d.json scene_id:=pLe4wQe7qrG
+ros2 launch activesplat habitat.launch.py config:=$(ros2 pkg prefix activesplat)/share/activesplat/config/datasets/gibson.json scene_id:=Denmark
+# e.g. MP3D-gZ6f7yhEvPG
+ros2 launch activesplat habitat.launch.py config:=$(ros2 pkg prefix activesplat)/share/activesplat/config/datasets/mp3d.json scene_id:=gZ6f7yhEvPG
 ```
 <details>
   <summary>[Result folder structure (click to expand)]</summary>

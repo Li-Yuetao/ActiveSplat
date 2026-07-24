@@ -1,10 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import os
-PACKAGE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
-SRC_PATH = os.path.abspath(os.path.join(PACKAGE_PATH, 'src'))
 import sys
-sys.path.append(PACKAGE_PATH)
-sys.path.append(SRC_PATH)
+SCRIPT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
+for path in (os.path.join(SCRIPT_ROOT, 'src'), os.path.dirname(__file__)):
+    if path not in sys.path:
+        sys.path.insert(0, path)
 import argparse
 import threading
 import json
@@ -25,24 +25,28 @@ from PIL import ImageFile, Image
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 Image.MAX_IMAGE_PIXELS = None
 
-import rospy
+import rclpy
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.node import Node
+from rclpy.logging import LoggingSeverity
 from std_msgs.msg import Int32, Bool
 from geometry_msgs.msg import PoseStamped, Twist, Pose, Point
 
-from utils import PROJECT_NAME, GlobalState
+from utils.path_utils import source_root
+PACKAGE_PATH = source_root(__file__)
+SRC_PATH = os.path.join(PACKAGE_PATH, 'src')
+if SRC_PATH not in sys.path:
+    sys.path.insert(0, SRC_PATH)
+
+from utils import PROJECT_NAME, GlobalState, TURN, SPEED, USE_ROTATION_SELECTION, USE_HIGH_CONNECTIVITY, USE_RANDOM_SELECTION, USE_HIERARCHICAL_PLAN
 from utils.logging_utils import Log
+from utils.ros2_utils import call_service, service_callback_guard
 from utils.gui_utils import PoseChangeType, c2w_world_to_topdown, c2w_topdown_to_world, is_pose_changed, get_horizon_bound_topdown
 from dataloader import PoseDataType, convert_to_c2w_opencv
 from planner.planner import Frustum, get_voronoi_graph, draw_voronoi_graph, get_closest_vertex_index, get_safe_dijkstra_path, get_escape_plan, get_obstacle_map, interpolate_path, get_closest_node_index, get_subregions, update_with_subregion
-from scripts.nodes import TURN, SPEED, USE_ROTATION_SELECTION, USE_HIGH_CONNECTIVITY, USE_RANDOM_SELECTION, USE_HIERARCHICAL_PLAN,\
-    GetTopdownConfig, GetTopdownConfigResponse, GetTopdownConfigRequest,\
-        GetTopdown, GetTopdownResponse, GetTopdownRequest,\
-            SetPlannerState, SetPlannerStateResponse, SetPlannerStateRequest,\
-                GetDatasetConfig, GetDatasetConfigResponse, GetDatasetConfigRequest,\
-                    SetMapper, SetMapperResponse, SetMapperRequest,\
-                        GetOpacity, GetOpacityRequest, GetOpacityResponse,\
-                            GetVoronoiGraph, GetVoronoiGraphRequest, GetVoronoiGraphResponse,\
-                                GetNavPath, GetNavPathRequest, GetNavPathResponse
+from activesplat.srv import GetTopdownConfig, GetTopdown, SetPlannerState, GetDatasetConfig, SetMapper, GetOpacity, GetVoronoiGraph, GetNavPath
+
 class NodesFlagsType(Enum):
     UNARRIVED = 'UNARRIVED'
     IN_HORIZON = 'IN_HORIZON'
@@ -60,7 +64,7 @@ NODES_FLAGS_WEIGHT_INIT = {
     NodesFlagsType.FAIL: -60
 }
 
-class PlannerNode:
+class PlannerNode(Node):
     
     __ENABLE_STATES = (GlobalState.AUTO_PLANNING, GlobalState.MANUAL_PLANNING)
 
@@ -74,7 +78,13 @@ class PlannerNode:
         self,
         config_url:str,
         hide_windows:bool,
+        debug:bool,
         save_runtime_data:bool) -> None:
+        super().__init__('planner_node')
+        self.get_logger().set_level(
+            LoggingSeverity.DEBUG if debug else LoggingSeverity.INFO
+        )
+
         self.__hide_windows = hide_windows
         self.__voronoi_graph_nodes_score_max = 0
         self.__voronoi_graph_nodes_score_min = 0
@@ -91,7 +101,7 @@ class PlannerNode:
         self.__voronoi_graph_nodes_colormap = colors.LinearSegmentedColormap.from_list('voronoi_graph_nodes_colormap', voronoi_graph_nodes_colormap_colors)
         
         os.chdir(PACKAGE_PATH)
-        rospy.loginfo(f'Current working directory: {os.getcwd()}')
+        self.get_logger().info(f'Current working directory: {os.getcwd()}')
         with open(config_url) as f:
             config = json.load(f)
             
@@ -107,36 +117,54 @@ class PlannerNode:
         
         self.__global_state = None
         self.__global_state_condition = threading.Condition()
-        rospy.Service('set_planner_state', SetPlannerState, self.__set_planner_state)
-        rospy.Service('get_voronoi_graph', GetVoronoiGraph, self.__get_voronoi_graph_callback)
-        rospy.Service('get_navigation_path', GetNavPath, self.__get_navigation_path_callback)
-        with self.__global_state_condition:
-            self.__global_state_condition.wait()
-        
-        self.__get_dataset_config_service = rospy.ServiceProxy('get_dataset_config', GetDatasetConfig)
-        rospy.wait_for_service('get_dataset_config')
-        
-        self.__get_topdown_config_service = rospy.ServiceProxy('get_topdown_config', GetTopdownConfig)
-        rospy.wait_for_service('get_topdown_config')
+        self.__callback_group = ReentrantCallbackGroup()
+        self.create_service(SetPlannerState, 'set_planner_state', self.__set_planner_state, callback_group=self.__callback_group)
+        self.create_service(GetVoronoiGraph, 'get_voronoi_graph', self.__get_voronoi_graph_callback, callback_group=self.__callback_group)
+        self.create_service(GetNavPath, 'get_navigation_path', self.__get_navigation_path_callback, callback_group=self.__callback_group)
+        self.__pose_received = threading.Event()
+        self.stop_requested = threading.Event()
+        self.worker_done = threading.Event()
+        self.__worker = threading.Thread(target=self.__worker_entry, name='PlannerMain', daemon=True)
+        self.__worker.start()
 
-        self.__get_topdown_service = rospy.ServiceProxy('get_topdown', GetTopdown)
-        rospy.wait_for_service('get_topdown')
+    def __worker_entry(self):
+        try:
+            self.__run()
+        except Exception as exc:
+            self.get_logger().error(f'planner worker failed: {exc}')
+        finally:
+            self.worker_done.set()
+
+    def __run(self):
+        with self.__global_state_condition:
+            self.__global_state_condition.wait(timeout=300.0)
+        if self.__global_state is None:
+            self.get_logger().error('timed out waiting for initial planner state')
+            return
+        if self.__global_state == GlobalState.QUIT:
+            return
+        
+        self.__get_dataset_config_service = self.create_client(GetDatasetConfig, 'get_dataset_config', callback_group=self.__callback_group)
+        
+        self.__get_topdown_config_service = self.create_client(GetTopdownConfig, 'get_topdown_config', callback_group=self.__callback_group)
+
+        self.__get_topdown_service = self.create_client(GetTopdown, 'get_topdown', callback_group=self.__callback_group)
         
         self.__update_map_cv2_condition = threading.Condition()
         
         self.__setup_for_episode(init=True)
         
-        set_mapper = rospy.ServiceProxy('set_mapper', SetMapper)
-        rospy.wait_for_service('set_mapper')
+        self.__set_mapper_service = self.create_client(SetMapper, 'set_mapper', callback_group=self.__callback_group)
         
-        rospy.Subscriber('high_loss_samples_pose', Pose, self.__get_high_loss_samples_pose)
-        self.__get_opacity_service = rospy.ServiceProxy('get_opacity', GetOpacity)
-        rospy.wait_for_service('get_opacity')
+        self.create_subscription(Pose, 'high_loss_samples_pose', self.__get_high_loss_samples_pose, 10, callback_group=self.__callback_group)
+        self.__get_opacity_service = self.create_client(GetOpacity, 'get_opacity', callback_group=self.__callback_group)
 
-        rospy.Subscriber('orb_slam3/camera_pose', PoseStamped, self.__camera_pose_callback)
-        rospy.wait_for_message('orb_slam3/camera_pose', PoseStamped)
+        self.create_subscription(PoseStamped, 'orb_slam3/camera_pose', self.__camera_pose_callback, 10, callback_group=self.__callback_group)
+        if not self.__pose_received.wait(timeout=300.0):
+            self.get_logger().error('timed out waiting for initial camera pose')
+            return
         
-        rospy.Subscriber('movement_fail_times', Int32, self.__movement_fail_times_callback)
+        self.create_subscription(Int32, 'movement_fail_times', self.__movement_fail_times_callback, 10, callback_group=self.__callback_group)
         
         self.__cv2_windows_with_callback_opened = {
             'topdown_free_map': False}
@@ -146,13 +174,15 @@ class PlannerNode:
             target=self.__update_map_cv2,
             daemon=True).start()
         
-        self.__cmd_vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)
-        self.__trigger_update_voronoi_graph_pub = rospy.Publisher('update_voronoi_graph_vis', Bool, queue_size=1)
-        self.__trigger_update_high_connectivity_nodes_pub = rospy.Publisher('update_high_connectivity_nodes_vis', Bool, queue_size=1)
-        self.__trigger_update_global_visibility_map_pub = rospy.Publisher('update_global_visibility_map_vis', Int32, queue_size=1)
+        self.__cmd_vel_pub = self.create_publisher(Twist, 'cmd_vel', 1)
+        self.__trigger_update_voronoi_graph_pub = self.create_publisher(Bool, 'update_voronoi_graph_vis', 1)
+        self.__trigger_update_high_connectivity_nodes_pub = self.create_publisher(Bool, 'update_high_connectivity_nodes_vis', 1)
+        self.__trigger_update_global_visibility_map_pub = self.create_publisher(Int32, 'update_global_visibility_map_vis', 1)
         self.__fail_vertices_nodes_index = []
         
-        while not rospy.is_shutdown() and self.__global_state != GlobalState.QUIT:
+        self.__controller_idle_condition = threading.Condition()
+        
+        while rclpy.ok() and self.__global_state != GlobalState.QUIT:
             if self.__global_state not in self.__ENABLE_STATES:
                 if self.__global_state == GlobalState.REPLAY:
                     self.__setup_for_episode()
@@ -162,77 +192,83 @@ class PlannerNode:
                 continue
             else:
                 if self.__bootstrap_flag:
-                    set_mapper_request:SetMapperRequest = SetMapperRequest()
+                    set_mapper_request = SetMapper.Request()
                     set_mapper_request.kf_every = 1
                     set_mapper_request.map_every = 2
-                    try:
-                        set_mapper_response:SetMapperResponse = set_mapper(set_mapper_request)
-                    except rospy.ServiceException as e:
-                        rospy.logerr(f'Set mapper service call failed: {e}')
+                    set_mapper_response = call_service(self, self.__set_mapper_service, set_mapper_request, 30.0)
+                    if set_mapper_response is None:
                         self.__global_state = GlobalState.QUIT
                         continue
                     kf_every_old = set_mapper_response.kf_every_old
                     map_every_old = set_mapper_response.map_every_old
-                    twist_bootstrap = Twist()
-                    twist_bootstrap.angular.z = 1
-                    twist_bootstrap_up_down = Twist()
-                    self.__rotation_arrived_flag = False
-                    for booststrap_turn_index in range(int(np.ceil(360 / self.__dataset_config.agent_turn_angle))):
-                        
-                        pose_c2w_world = self.__pose_last['c2w_world'].copy()
-                        self.__publish_cmd_vel(twist_bootstrap)
-                        self.__get_topdown()
-                        with self.__update_map_cv2_condition:
-                            self.__update_map_cv2_condition.notify_all()
-                        while is_pose_changed(
-                                pose_c2w_world,
-                                self.__pose_last['c2w_world'],
-                                self.__pose_update_translation_threshold,
-                                self.__pose_update_rotation_threshold) == PoseChangeType.NONE and self.__global_state != GlobalState.QUIT:
+                    bootstrap_turn_num = int(np.ceil(360 / self.__dataset_config.agent_turn_angle))
+                    if self.__dataset_config.agent_tilt_angle == 0:
+                        start_orientation = np.arctan2(self.__pose_last['topdown_rotation_vector'][1], self.__pose_last['topdown_rotation_vector'][0])
+                        self.__destination_orientations = np.deg2rad(np.degrees(start_orientation) - (np.arange(bootstrap_turn_num) + 1) * self.__dataset_config.agent_turn_angle)
+                        with self.__controller_idle_condition:
+                            self.__controller_idle_condition.wait()
+                        if self.__global_state == GlobalState.QUIT:
+                            break
+                    else:
+                        twist_bootstrap = Twist()
+                        twist_bootstrap.angular.z = TURN
+                        twist_bootstrap_up_down = Twist()
+                        self.__rotation_arrived_flag = False
+                        for bootstrap_turn_index in range(bootstrap_turn_num):
+                            
+                            pose_c2w_world = self.__pose_last['c2w_world'].copy()
                             self.__publish_cmd_vel(twist_bootstrap)
                             self.__get_topdown()
                             with self.__update_map_cv2_condition:
                                 self.__update_map_cv2_condition.notify_all()
-                                
-                        pose_c2w_world = self.__pose_last['c2w_world'].copy()
-                        updown_times = 3
-                        twist_bootstrap_up_down.angular.y = -1 if (((2*updown_times-1-booststrap_turn_index % (2*updown_times) * 2)) < 0) else 1
-                        self.__publish_cmd_vel(twist_bootstrap_up_down)
-                        self.__get_topdown()
-                        with self.__update_map_cv2_condition:
-                            self.__update_map_cv2_condition.notify_all()
-                        while is_pose_changed(
-                                pose_c2w_world,
-                                self.__pose_last['c2w_world'],
-                                self.__pose_update_translation_threshold,
-                                self.__pose_update_rotation_threshold) == PoseChangeType.NONE and self.__global_state != GlobalState.QUIT:
+                            while is_pose_changed(
+                                    pose_c2w_world,
+                                    self.__pose_last['c2w_world'],
+                                    self.__pose_update_translation_threshold,
+                                    self.__pose_update_rotation_threshold) == PoseChangeType.NONE and self.__global_state != GlobalState.QUIT:
+                                self.__publish_cmd_vel(twist_bootstrap)
+                                self.__get_topdown()
+                                with self.__update_map_cv2_condition:
+                                    self.__update_map_cv2_condition.notify_all()
+                                    
+                            pose_c2w_world = self.__pose_last['c2w_world'].copy()
+                            updown_times = 3
+                            twist_bootstrap_up_down.angular.y = -1.0 if (((2*updown_times-1-bootstrap_turn_index % (2*updown_times) * 2)) < 0) else 1.0
                             self.__publish_cmd_vel(twist_bootstrap_up_down)
                             self.__get_topdown()
                             with self.__update_map_cv2_condition:
                                 self.__update_map_cv2_condition.notify_all()
-                    booststrap_turn_index += 1
-                    if booststrap_turn_index % 2 == 1:
-                        pose_c2w_world = self.__pose_last['c2w_world'].copy()
-                        twist_bootstrap_up_down.angular.y = -1
-                        self.__publish_cmd_vel(twist_bootstrap_up_down)
-                        self.__get_topdown()
-                        with self.__update_map_cv2_condition:
-                            self.__update_map_cv2_condition.notify_all()
-                        while is_pose_changed(
-                                pose_c2w_world,
-                                self.__pose_last['c2w_world'],
-                                self.__pose_update_translation_threshold,
-                                self.__pose_update_rotation_threshold) == PoseChangeType.NONE and self.__global_state != GlobalState.QUIT:
+                            while is_pose_changed(
+                                    pose_c2w_world,
+                                    self.__pose_last['c2w_world'],
+                                    self.__pose_update_translation_threshold,
+                                    self.__pose_update_rotation_threshold) == PoseChangeType.NONE and self.__global_state != GlobalState.QUIT:
+                                self.__publish_cmd_vel(twist_bootstrap_up_down)
+                                self.__get_topdown()
+                                with self.__update_map_cv2_condition:
+                                    self.__update_map_cv2_condition.notify_all()
+                        bootstrap_turn_index += 1
+                        if bootstrap_turn_index % 2 == 1:
+                            pose_c2w_world = self.__pose_last['c2w_world'].copy()
+                            twist_bootstrap_up_down.angular.y = -1.0
                             self.__publish_cmd_vel(twist_bootstrap_up_down)
                             self.__get_topdown()
                             with self.__update_map_cv2_condition:
                                 self.__update_map_cv2_condition.notify_all()
+                            while is_pose_changed(
+                                    pose_c2w_world,
+                                    self.__pose_last['c2w_world'],
+                                    self.__pose_update_translation_threshold,
+                                    self.__pose_update_rotation_threshold) == PoseChangeType.NONE and self.__global_state != GlobalState.QUIT:
+                                self.__publish_cmd_vel(twist_bootstrap_up_down)
+                                self.__get_topdown()
+                                with self.__update_map_cv2_condition:
+                                    self.__update_map_cv2_condition.notify_all()
                     set_mapper_request.kf_every = kf_every_old
                     set_mapper_request.map_every = map_every_old
-                    try:
-                        set_mapper_response:SetMapperResponse = set_mapper(set_mapper_request)
-                    except rospy.ServiceException as e:
-                        rospy.logerr(f'Set mapper service call failed: {e}')
+                    set_mapper_response = call_service(self, self.__set_mapper_service, set_mapper_request, 30.0)
+                    if set_mapper_response is None:
+                        self.get_logger().error('Set mapper service call failed.')
                         self.__global_state = GlobalState.QUIT
                         continue
                     self.__bootstrap_flag = False
@@ -302,11 +338,11 @@ class PlannerNode:
                                     
                                     node_vertice = self.__voronoi_graph['vertices'][node_index]
                                     if subregion == current_subregion:
-                                        rospy.logdebug(f'The node {node_index} is in the current subregion, skip.')
+                                        self.get_logger().debug(f'The node {node_index} is in the current subregion, skip.')
                                         subregion_nodes_path_length[subregion].append(np.nan)
                                         continue
                                     if self.__is_close_to_arrived(node_vertice):
-                                        rospy.logdebug(f'The node {node_index} is close to the arrived position, skip.')
+                                        self.get_logger().debug(f'The node {node_index} is close to the arrived position, skip.')
                                         subregion_nodes_path_length[subregion].append(np.nan)
                                         continue
                                     
@@ -458,8 +494,9 @@ class PlannerNode:
                                     self.__navigation_path = navigation_path
                                     self.__interpolate_path()
                                     self.__navigation_path_index = nodes_path_index[node_count]
-                                    # NOTE: update global invisibility map
-                                    self.__trigger_update_global_visibility_map_pub.publish(Int32(node_index))
+                                    # NOTE: update global visibility map
+                                    update_msg = Int32(); update_msg.data = int(node_index)
+                                    self.__trigger_update_global_visibility_map_pub.publish(update_msg)
                                     break
                             if self.__navigation_path is None:
                                 if (target_too_far_but_prioritize["node_index"] is not None) and\
@@ -468,7 +505,7 @@ class PlannerNode:
                                     self.__navigation_path = target_too_far_but_prioritize["navigation_path"]
                                     self.__interpolate_path()
                                 elif bootstrap_used:
-                                    rospy.logwarn('No node is reachable.')
+                                    self.get_logger().warning('No node is reachable.')
                                     self.__bootstrap_flag = True
                                     self.use_global_plan_flag = True
                     with self.__update_map_cv2_condition:
@@ -492,15 +529,15 @@ class PlannerNode:
                             self.__position_arrived_flag = False
                             self.__local_path_executing = False
                             self.__local_view_count = 1
-                            rospy.logwarn('Agent is close to the obstacle. Skip the local view.')
+                            self.get_logger().warning('Agent is close to the obstacle. Skip the local view.')
                             continue
                         self.__check_agent_close_to_obstacle_flag = False
                     
                     if not self.__local_path_executing:
-                        try:
-                            get_opacity_response:GetOpacityResponse = self.__get_opacity_service(GetOpacityRequest(self.__rotation_arrived_flag, [], []))
-                        except rospy.ServiceException as e:
-                            rospy.logerr(f'Get local opacity service call failed: {e}')
+                        request = GetOpacity.Request()
+                        request.arrived_flag = bool(self.__rotation_arrived_flag)
+                        get_opacity_response = call_service(self, self.__get_opacity_service, request, 120.0)
+                        if get_opacity_response is None:
                             self.__global_state = GlobalState.QUIT
                             with self.__global_state_condition:
                                 self.__global_state_condition.notify()
@@ -510,7 +547,7 @@ class PlannerNode:
                         for idx, target_frustum in enumerate(get_opacity_response.targets_frustums):
                             target_frustum:Pose
                             self.__local_invisibility_info[idx] = Frustum()
-                            if target_frustum.position.x == 0 and target_frustum.position.y == 0 and target_frustum.position.z == 0:
+                            if target_frustum.position.x == 0.0 and target_frustum.position.y == 0.0 and target_frustum.position.z == 0.0:
                                 continue
                             target_frustum_quaternion = np.array([
                                 target_frustum.orientation.w,
@@ -564,16 +601,15 @@ class PlannerNode:
                         if not self.__local_path_executing:
                             self.__local_path_executing = True
                         if self.__local_set_mapper_flag:
-                            set_mapper_request:SetMapperRequest = SetMapperRequest()
+                            set_mapper_request = SetMapper.Request()
                             set_mapper_request.kf_every = 2
                             set_mapper_request.map_every = 2
                             if self.kf_every_old == set_mapper_request.kf_every and self.map_every_old == set_mapper_request.map_every:
                                 self.__local_path_executing = True
                                 pass
-                            try:
-                                set_mapper_response:SetMapperResponse = set_mapper(set_mapper_request)
-                            except rospy.ServiceException as e:
-                                rospy.logerr(f'Set mapper service call failed: {e}')
+                            set_mapper_response = call_service(self, self.__set_mapper_service, set_mapper_request, 30.0)
+                            if set_mapper_response is None:
+                                self.get_logger().error('Set mapper service call failed.')
                                 self.__global_state = GlobalState.QUIT
                                 continue
                             self.kf_every_old = set_mapper_response.kf_every_old
@@ -588,10 +624,10 @@ class PlannerNode:
                             cmd_vel_msg = Twist()
                             if diff_vertical_orientation < 0:
                                 # looking up
-                                cmd_vel_msg.angular.y = 1
+                                cmd_vel_msg.angular.y = 1.0
                             elif diff_vertical_orientation > 0:
                                 # looking down
-                                cmd_vel_msg.angular.y = -1
+                                cmd_vel_msg.angular.y = -1.0
                             else:
                                 raise ValueError('Unknown vertical condition.')
                             self.__publish_cmd_vel(cmd_vel_msg)
@@ -625,9 +661,9 @@ class PlannerNode:
                     if np.abs(start_vertical_orientation) >= (self.__dataset_config.agent_tilt_angle - self.__local_adjust_pitch_epsilon):
                         cmd_vel_msg = Twist()
                         if start_vertical_orientation < 0:
-                            cmd_vel_msg.angular.y = -1
+                            cmd_vel_msg.angular.y = -1.0
                         elif start_vertical_orientation > 0:
-                            cmd_vel_msg.angular.y = 1
+                            cmd_vel_msg.angular.y = 1.0
                         else:
                             raise ValueError('Unknown vertical condition.')
                         self.__publish_cmd_vel(cmd_vel_msg)
@@ -636,17 +672,16 @@ class PlannerNode:
                             self.__update_map_cv2_condition.notify_all()
                         continue 
                     if self.__escape_flag != self.EscapeFlag.NONE:
-                        rospy.logwarn('Cancel the escape plan because arrived.')
+                        self.get_logger().warning('Cancel the escape plan because arrived.')
                         self.__escape_flag = self.EscapeFlag.NONE
 
                     if self.__local_set_mapper_flag == False:
-                        set_mapper_request:SetMapperRequest = SetMapperRequest()
+                        set_mapper_request = SetMapper.Request()
                         set_mapper_request.kf_every = self.kf_every_old
                         set_mapper_request.map_every = self.map_every_old
-                        try:
-                            set_mapper_response:SetMapperResponse = set_mapper(set_mapper_request)
-                        except rospy.ServiceException as e:
-                            rospy.logerr(f'Set mapper service call failed: {e}')
+                        set_mapper_response = call_service(self, self.__set_mapper_service, set_mapper_request, 30.0)
+                        if set_mapper_response is None:
+                            self.get_logger().error('Set mapper service call failed.')
                             self.__global_state = GlobalState.QUIT
                             continue
                         self.__local_set_mapper_flag = True
@@ -748,10 +783,10 @@ class PlannerNode:
                         line_test_result[agent_mask > 0] = self.__topdown_free_map[agent_mask > 0]
                         assert cv2.countNonZero(self.__topdown_free_map) == free_space_pixels_num, 'self.__topdown_free_map changed.'
                         if cv2.countNonZero(line_test_result) != free_space_pixels_num:
-                            rospy.logwarn('Line test failed, crash if follow the routine.')
+                            self.get_logger().warning('Line test failed, crash if follow the routine.')
                             self.__rotation_arrived_flag = True
                             if self.__escape_flag != self.EscapeFlag.NONE:
-                                rospy.logwarn('Cancel the escape plan because line test.')
+                                self.get_logger().warning('Cancel the escape plan because line test.')
                                 self.__escape_flag = self.EscapeFlag.NONE
                             continue
                     if self.__escape_flag == self.EscapeFlag.NONE:
@@ -802,11 +837,11 @@ class PlannerNode:
                             self.__agent_step_size_pixel,
                             self.__inaccessible_database[topdown_translation])
                         twist_rotation = Twist()
-                        twist_rotation.angular.z = -rotation_direction
+                        twist_rotation.angular.z = float(-rotation_direction)
                         twist_translation = Twist()
                         twist_translation.linear.x = SPEED
                         for translation_success in translation_test_condition:
-                            rospy.logwarn('Start escape rotation.')
+                            self.get_logger().warning('Start escape rotation.')
                             pose_c2w_world = self.__pose_last['c2w_world'].copy()
                             self.__publish_cmd_vel(twist_rotation)
                             self.__get_topdown()
@@ -825,7 +860,7 @@ class PlannerNode:
                             if not (self.__global_state in self.__ENABLE_STATES):
                                 break
                             if translation_success:
-                                rospy.logwarn('Start escape translation.')
+                                self.get_logger().warning('Start escape translation.')
                                 self.__escape_flag = self.EscapeFlag.ESCAPE_TRANSLATION
                                 while self.__escape_flag == self.EscapeFlag.ESCAPE_TRANSLATION and self.__global_state != GlobalState.QUIT:
                                     self.__publish_cmd_vel(twist_translation)
@@ -835,10 +870,10 @@ class PlannerNode:
                                 if not (self.__global_state in self.__ENABLE_STATES):
                                     break
                                 if self.__escape_flag == self.EscapeFlag.NONE:
-                                    rospy.logwarn('Escape finished.')
+                                    self.get_logger().warning('Escape finished.')
                                     break
                                 elif self.__escape_flag == self.EscapeFlag.ESCAPE_ROTATION:
-                                    rospy.logwarn('Cancel the escape translation plan.')
+                                    self.get_logger().warning('Cancel the escape translation plan.')
                                     if len(self.__inaccessible_database[topdown_translation]) > 0:
                                         assert np.linalg.norm(self.__inaccessible_database[topdown_translation] - self.__pose_last['topdown_translation']) >= self.__agent_step_size_pixel * 0.1, f"Invalid inaccessible_database: {self.__inaccessible_database[topdown_translation]}"
                                     self.__inaccessible_database[topdown_translation] = np.vstack([
@@ -849,7 +884,7 @@ class PlannerNode:
                         if not (self.__global_state in self.__ENABLE_STATES):
                             continue
                         if self.__escape_flag == self.EscapeFlag.NONE:
-                            rospy.logwarn('Escape finished, now replan.')
+                            self.get_logger().warning('Escape finished, now replan.')
                             if USE_ROTATION_SELECTION:
                                 if not self.__is_close_to_rotation_observed_region(self.__pose_last['topdown_translation']):
                                     self.__position_arrived_flag = True
@@ -860,12 +895,13 @@ class PlannerNode:
                                 self.__rotation_arrived_flag = True
                         else:
                             # FIXME: Escape failed, it should not happen.
-                            rospy.logerr('Escape failed, it should not happen.')
+                            self.get_logger().error('Escape failed, it should not happen.')
                     elif self.__escape_flag == self.EscapeFlag.ESCAPE_TRANSLATION:
                         # FIXME: Escape failed, it should not happen.
-                        rospy.logerr('Invalid escape flag, it should not happen.')
+                        self.get_logger().error('Invalid escape flag, it should not happen.')
                         self.__escape_flag = self.EscapeFlag.NONE
         self.__save_results()
+        self.worker_done.set()
         
     def __is_close_to_obstacle(self, topdown_position:np.ndarray, obstacle_distance_threshold:float) -> bool:
         proximity_mask = cv2.circle(
@@ -934,7 +970,10 @@ class PlannerNode:
         self.__cluster_nodes_map = None
         self.__update_cluster_nodes_map_flag = False
 
-        self.__dataset_config:GetDatasetConfigResponse = self.__get_dataset_config_service(GetDatasetConfigRequest())
+        self.__dataset_config = call_service(
+            self, self.__get_dataset_config_service, GetDatasetConfig.Request(), 30.0)
+        if self.__dataset_config is None:
+            raise RuntimeError('get_dataset_config failed')
         self.__results_dir = self.__dataset_config.results_dir
         os.makedirs(self.__results_dir, exist_ok=True)
         self.__save_topdown_map_count = 0
@@ -950,7 +989,10 @@ class PlannerNode:
         self.__interpolate_path_flag = False
         self.__controller_destination_flag = False
         
-        topdown_config_response:GetTopdownConfigResponse = self.__get_topdown_config_service(GetTopdownConfigRequest())
+        topdown_config_response = call_service(
+            self, self.__get_topdown_config_service, GetTopdownConfig.Request(), 30.0)
+        if topdown_config_response is None:
+            raise RuntimeError('get_topdown_config failed')
         self.__topdown_config = {
             'world_dim_index': (
                 topdown_config_response.topdown_x_world_dim_index,
@@ -1021,10 +1063,10 @@ class PlannerNode:
             self.__update_map_cv2_condition.notify_all()
                         
     def __get_topdown(self) -> None:
-        try:
-            get_topdown_response:GetTopdownResponse = self.__get_topdown_service(GetTopdownRequest(self.__rotation_arrived_flag))
-        except rospy.ServiceException as e:
-            rospy.logerr(f'Get topdown service call failed: {e}')
+        request = GetTopdown.Request()
+        request.arrived_flag = bool(self.__rotation_arrived_flag)
+        get_topdown_response = call_service(self, self.__get_topdown_service, request, 120.0)
+        if get_topdown_response is None:
             self.__global_state = GlobalState.QUIT
             with self.__global_state_condition:
                 self.__global_state_condition.notify_all()
@@ -1055,7 +1097,7 @@ class PlannerNode:
                 self.__topdown_config,
                 self.__height_direction)
             
-        if self.__last_twist.linear.x > 0 and self.__last_twist.angular.z == 0:
+        if self.__last_twist.linear.x > 0 and self.__last_twist.angular.z == 0.0:
             self.__horizon_bbox_last_translation = deepcopy(self.__horizon_bbox)
             
         if self.__rotation_arrived_flag or self.__voronoi_graph is None or self.__voronoi_graph_cv2 is None:
@@ -1087,16 +1129,16 @@ class PlannerNode:
                     obstacle_distance_threshold = self.__agent_radius_pixel * 2.0
                     if node_index in self.__fail_vertices_nodes_index:
                         node_vertex_c2w_worlds.append(Point())
-                        rospy.logdebug(f'Fail vertices: {node_index}, skip.')
+                        self.get_logger().debug(f'Fail vertices: {node_index}, skip.')
                         continue
                     elif self.__is_close_to_obstacle(self.__voronoi_graph['vertices'][node_index], obstacle_distance_threshold):
                         self.__fail_vertices_nodes_index.append(node_index)
                         node_vertex_c2w_worlds.append(Point())
-                        rospy.logdebug(f'The {node_index} node is close to the obstacle, skip.')
+                        self.get_logger().debug(f'The {node_index} node is close to the obstacle, skip.')
                         continue
                     elif self.__is_close_to_rotation_observed_region(self.__voronoi_graph['vertices'][node_index], radius_num=1.0):
                         node_vertex_c2w_worlds.append(Point())
-                        rospy.logdebug(f'The {node_index} node is close to the rotation observed region, skip.')
+                        self.get_logger().debug(f'The {node_index} node is close to the rotation observed region, skip.')
                         continue
                     node_vertex = self.__voronoi_graph['vertices'][node_index]
                     node_vertex_c2w_world = c2w_topdown_to_world(
@@ -1104,14 +1146,16 @@ class PlannerNode:
                         self.__topdown_config,
                         height_value=0)
                     p = Point()
-                    p.x = node_vertex_c2w_world[0]
-                    p.y = node_vertex_c2w_world[1]
-                    p.z = node_vertex_c2w_world[2]
+                    p.x = float(node_vertex_c2w_world[0])
+                    p.y = float(node_vertex_c2w_world[1])
+                    p.z = float(node_vertex_c2w_world[2])
                     node_vertex_c2w_worlds.append(p)
-                try:
-                    get_opacity_response:GetOpacityResponse = self.__get_opacity_service(GetOpacityRequest(self.__rotation_arrived_flag, node_vertex_c2w_worlds, nodes_id))
-                except rospy.ServiceException as e:
-                    rospy.logerr(f'Get global opacity service call failed: {e}')
+                request = GetOpacity.Request()
+                request.arrived_flag = bool(self.__rotation_arrived_flag)
+                request.nodes = node_vertex_c2w_worlds
+                request.nodes_id = [int(value) for value in nodes_id]
+                get_opacity_response = call_service(self, self.__get_opacity_service, request, 120.0)
+                if get_opacity_response is None:
                     self.__global_state = GlobalState.QUIT
                     with self.__global_state_condition:
                         self.__global_state_condition.notify()
@@ -1232,8 +1276,10 @@ class PlannerNode:
                 ])
                 self.is_voronoi_graph_ready = True
                 
-                self.__trigger_update_high_connectivity_nodes_pub.publish(Bool(True))
-                self.__trigger_update_voronoi_graph_pub.publish(Bool(True))
+                update_msg = Bool(); update_msg.data = True
+                self.__trigger_update_high_connectivity_nodes_pub.publish(update_msg)
+                update_msg = Bool(); update_msg.data = True
+                self.__trigger_update_voronoi_graph_pub.publish(update_msg)
                     
             self.__voronoi_graph_cv2 = draw_voronoi_graph(
                 background=np.zeros_like(self.__topdown_free_map),
@@ -1295,7 +1341,7 @@ class PlannerNode:
         
         def mouse_callback(event:int, x:int, y:int, flags:int, param:int) -> None:
             if event == cv2.EVENT_LBUTTONDBLCLK:
-                rospy.logdebug(f'Left button double clicked at: ({x}, {y})')
+                self.get_logger().debug(f'Left button double clicked at: ({x}, {y})')
                 if self.__global_state == GlobalState.MANUAL_PLANNING and\
                     self.__rotation_arrived_flag and\
                         self.__voronoi_graph is not None:
@@ -1323,7 +1369,7 @@ class PlannerNode:
                         self.__fail_vertices_nodes_index.append(vertex_destination_index)
                         self.__fail_vertices_nodes = np.vstack([self.__fail_vertices_nodes, self.__voronoi_graph['vertices'][vertex_destination_index]])
                     if navigation_path_index is None or navigation_path is None:
-                        rospy.logwarn('No path found.')
+                        self.get_logger().warning('No path found.')
                         self.__destination_orientations = None
                         return
                     else:
@@ -1332,7 +1378,7 @@ class PlannerNode:
                         self.__navigation_path_index = navigation_path_index
                         return
         
-        while not rospy.is_shutdown() and self.__global_state != GlobalState.QUIT:
+        while rclpy.ok() and self.__global_state != GlobalState.QUIT:
             if self.__global_state not in self.__ENABLE_STATES:
                 cv2.destroyAllWindows()
                 for window_name in self.__cv2_windows_with_callback_opened.keys():
@@ -1494,40 +1540,52 @@ class PlannerNode:
                         with self.__update_map_cv2_condition:
                             self.__update_map_cv2_condition.notify_all()
                             
-    def __set_planner_state(self, request:SetPlannerStateRequest) -> SetPlannerStateResponse:
-        rospy.loginfo(f'Set planner state: {request.global_state}')
-        if self.__global_state is None:
-            self.__global_state = GlobalState(request.global_state)
-            with self.__global_state_condition:
-                self.__global_state_condition.notify_all()
-        else:
-            global_state_old = GlobalState(self.__global_state)
-            self.__global_state = GlobalState(request.global_state)
-            if (self.__global_state in self.__ENABLE_STATES) and (global_state_old not in self.__ENABLE_STATES):
+    @service_callback_guard
+    def __set_planner_state(self, request:SetPlannerState.Request, response:SetPlannerState.Response) -> SetPlannerState.Response:
+        try:
+            self.get_logger().info(f'Set planner state: {request.global_state}')
+            if self.__global_state is None:
+                self.__global_state = GlobalState(request.global_state)
                 with self.__global_state_condition:
                     self.__global_state_condition.notify_all()
-                if global_state_old in [GlobalState.MANUAL_PLANNING]:
-                    with self.__update_map_cv2_condition:
-                        self.__update_map_cv2_condition.notify_all()
-            if self.__global_state == GlobalState.QUIT:
-                with self.__global_state_condition:
-                    self.__global_state_condition.notify_all()
-        return SetPlannerStateResponse()
+            else:
+                global_state_old = GlobalState(self.__global_state)
+                self.__global_state = GlobalState(request.global_state)
+                if (self.__global_state in self.__ENABLE_STATES) and (global_state_old not in self.__ENABLE_STATES):
+                    with self.__global_state_condition:
+                        self.__global_state_condition.notify_all()
+                    if global_state_old in [GlobalState.MANUAL_PLANNING]:
+                        with self.__update_map_cv2_condition:
+                            self.__update_map_cv2_condition.notify_all()
+                if self.__global_state == GlobalState.QUIT:
+                    self.stop_requested.set()
+                    with self.__global_state_condition:
+                        self.__global_state_condition.notify_all()
+                    if hasattr(self, '_PlannerNode__controller_idle_condition'):
+                        with self.__controller_idle_condition:
+                            self.__controller_idle_condition.notify_all()
+                    if hasattr(self, '_PlannerNode__update_map_cv2_condition'):
+                        with self.__update_map_cv2_condition:
+                            self.__update_map_cv2_condition.notify_all()
+                    self.__pose_received.set()
+        except Exception as exc:
+            self.get_logger().error(f'set_planner_state failed: {exc}')
+        return response
     
-    def __get_voronoi_graph_callback(self, request:GetVoronoiGraphRequest) -> GetVoronoiGraphResponse:
-        voronoi_graph = GetVoronoiGraphResponse()
+    @service_callback_guard
+    def __get_voronoi_graph_callback(self, request:GetVoronoiGraph.Request, voronoi_graph:GetVoronoiGraph.Response) -> GetVoronoiGraph.Response:
         if self.__voronoi_graph is not None and self.is_voronoi_graph_ready:
-            voronoi_graph.voronoi_graph_3d_points = self.voronoi_graph_3d_points.flatten().tolist()
-            voronoi_graph.voronoi_graph_3d_lines = self.voronoi_graph_3d_lines.flatten().tolist()
-            voronoi_graph.nodes_position_3d = self.nodes_position_3d.flatten().tolist()
-            voronoi_graph.high_connectivity_nodes_3d = self.high_connectivity_nodes_3d.flatten().tolist()
-            voronoi_graph.nodes_score = self.__voronoi_graph['nodes_score'].tolist()
+            voronoi_graph.voronoi_graph_3d_points = [float(v) for v in self.voronoi_graph_3d_points.flatten()]
+            voronoi_graph.voronoi_graph_3d_lines = [float(v) for v in self.voronoi_graph_3d_lines.flatten()]
+            voronoi_graph.nodes_position_3d = [float(v) for v in self.nodes_position_3d.flatten()]
+            voronoi_graph.high_connectivity_nodes_3d = [float(v) for v in self.high_connectivity_nodes_3d.flatten()]
+            voronoi_graph.nodes_score = [float(v) for v in self.__voronoi_graph['nodes_score']]
         return voronoi_graph
     
-    def __get_navigation_path_callback(self, request:GetNavPathRequest) -> GetNavPathResponse:
-        navigation_path = GetNavPathResponse()
+    @service_callback_guard
+    def __get_navigation_path_callback(self, request:GetNavPath.Request, navigation_path:GetNavPath.Response) -> GetNavPath.Response:
         if self.whole_navigation_path_3d is not None:
-            navigation_path.whole_navigation_path = self.whole_navigation_path_3d.flatten().tolist()
+            navigation_path.whole_navigation_path = [float(v) for v in self.whole_navigation_path_3d.flatten()]
         else:
             navigation_path.whole_navigation_path = []
         return navigation_path
@@ -1583,7 +1641,7 @@ class PlannerNode:
             return
         
         pose_rotation_vector = np.degrees(quaternion.as_rotation_vector(pose_quaternion))
-        rospy.loginfo(f'Agent:\n\tX: {pose_translation[0]:.2f}, Y: {pose_translation[1]:.2f}, Z: {pose_translation[2]:.2f}\n\tX_angle: {pose_rotation_vector[0]:.2f}, Y_angle: {pose_rotation_vector[1]:.2f}, Z_angle: {pose_rotation_vector[2]:.2f}')
+        self.get_logger().info(f'Agent:\n\tX: {pose_translation[0]:.2f}, Y: {pose_translation[1]:.2f}, Z: {pose_translation[2]:.2f}\n\tX_angle: {pose_rotation_vector[0]:.2f}, Y_angle: {pose_rotation_vector[1]:.2f}, Z_angle: {pose_rotation_vector[2]:.2f}')
         
         pose_topdown_rotation_vector, pose_topdown_translation, pitch_angle = c2w_world_to_topdown(
             pose_c2w_world,
@@ -1616,6 +1674,7 @@ class PlannerNode:
             'closest_node_index': self.closest_node_index}
         
         self.__pose_last = pose_current.copy()
+        self.__pose_received.set()
         self.__topdown_translation_array = np.vstack([self.__topdown_translation_array, pose_topdown_translation])
         
         if self.__global_state in self.__ENABLE_STATES:
@@ -1625,23 +1684,23 @@ class PlannerNode:
     
     def __movement_fail_times_callback(self, movement_fail_times:Int32) -> None:
         if movement_fail_times.data > self.__movement_fail_times and not self.__rotation_arrived_flag:
-            rospy.logwarn(f'Movement fail times: {self.__movement_fail_times}')
+            self.get_logger().warning(f'Movement fail times: {self.__movement_fail_times}')
             self.__movement_fail_times = movement_fail_times.data
             if self.__escape_flag == self.EscapeFlag.NONE:
                 self.__escape_flag = self.EscapeFlag.ESCAPE_ROTATION
-                rospy.logwarn('Start escaping.')
+                self.get_logger().warning('Start escaping.')
                 if self.__navigation_path is not None:
                     if len(self.__navigation_path) > 0 and len(self.__navigation_path) < 100:
                         self.__fail_vertices_nodes = np.vstack([self.__fail_vertices_nodes, self.__navigation_path[-1]])
             elif self.__escape_flag == self.EscapeFlag.ESCAPE_TRANSLATION:
                 self.__escape_flag = self.EscapeFlag.ESCAPE_ROTATION
-                rospy.logwarn('Escape failed.')
+                self.get_logger().warning('Escape failed.')
         elif movement_fail_times.data == 0 and self.__movement_fail_times > 0:
             self.__movement_fail_times = 0
-            rospy.loginfo('Movement fail times reset.')
+            self.get_logger().info('Movement fail times reset.')
             if self.__escape_flag == self.EscapeFlag.ESCAPE_TRANSLATION:
                 self.__escape_flag = self.EscapeFlag.NONE
-                rospy.loginfo('Escape success.')
+                self.get_logger().info('Escape success.')
         return
     
     def __publish_cmd_vel(self, twist:Twist) -> None:
@@ -1684,12 +1743,28 @@ if __name__ == '__main__':
                         required=False,
                         help='Debug mode, output more logs.')
     
-    args, ros_args = parser.parse_known_args()
-    
-    ros_args = dict([arg.split(':=') for arg in ros_args])
-    
-    rospy.init_node(ros_args['__name'], anonymous=True, log_level=rospy.DEBUG if bool(args.debug) else rospy.INFO)
-    
-    PlannerNode(args.config, bool(args.hide_windows), bool(args.save_runtime_data))
-    
-    rospy.loginfo(f'{PROJECT_NAME} planner node finished.')
+    args, _ = parser.parse_known_args()
+    rclpy.init()
+    node = PlannerNode(args.config, bool(args.hide_windows), bool(args.debug), bool(args.save_runtime_data))
+    executor = MultiThreadedExecutor(num_threads=4)
+    executor.add_node(node)
+    try:
+        while rclpy.ok() and not node.worker_done.is_set():
+            executor.spin_once(timeout_sec=0.1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        try:
+            executor.shutdown()
+        except KeyboardInterrupt:
+            pass
+        try:
+            node.destroy_node()
+        except KeyboardInterrupt:
+            pass
+        try:
+            if rclpy.ok():
+                rclpy.shutdown()
+        except KeyboardInterrupt:
+            pass
+    print(f'{PROJECT_NAME} planner node finished.')

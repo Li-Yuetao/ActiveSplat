@@ -6,6 +6,12 @@ import torch
 import numpy as np
 
 PROJECT_NAME = 'ActiveSplat'
+TURN = 0.2
+SPEED = 0.2
+USE_RANDOM_SELECTION = False
+USE_ROTATION_SELECTION = True
+USE_HIGH_CONNECTIVITY = True
+USE_HIERARCHICAL_PLAN = True
 
 OPENCV_TO_OPENGL = np.array(
     [
