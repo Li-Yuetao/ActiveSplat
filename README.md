@@ -41,7 +41,7 @@
 
 ## 🛠️ Installation
 
-Our environment has been tested on Ubuntu 20.04 with CUDA 11.8.
+Our environment has been tested on Ubuntu 20.04 with CUDA 11.8. We also provide a `ros2-humble` branch tested on Ubuntu 22.04 with CUDA 11.8.
 
 Clone the repository and create the conda environment:
 
